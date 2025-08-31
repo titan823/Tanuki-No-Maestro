@@ -1,10 +1,12 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
   <title>PNG・GIFレイヤー合成・エディター（単一HTML）</title>
   <style>
+    /* --- 基本変数 --- */
     :root {
       --bg: #111;
       --panel: #1b1b1b;
@@ -13,21 +15,154 @@
       --accent: #4caf50;
       --border: #2a2a2a;
       --danger: #ef5350;
+      
+      /* PWAアプリから持ってきた変数 */
+      --bg-primary: var(--panel);
+      --bg-secondary: var(--bg);
+      --bg-tertiary: #252525;
+      --bg-header: #333;
+      --text-light: #fff;
+      --shadow-secondary: rgba(0, 0, 0, 0.5);
+      --font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      --bg-button-update: #1976d2;
+      --bg-button-update-hover: #115293;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+    
+    /* --- PWAアプリから持ってきた基本レイアウト --- */
+    html, body {
+        height: 100%;
+        font-family: var(--font-family);
+        background-color: var(--bg-secondary);
+        color: var(--text);
+        overscroll-behavior-y: contain;
+        overflow: hidden; /* bodyでのスクロールを禁止 */
     }
-    header {
-      padding: 12px 16px; border-bottom: 1px solid var(--border);
-      display: flex; gap: 12px; align-items: center; background: #151515;
-      position: sticky; top: 0; z-index: 10;
+    .app-container {
+        display: flex;
+        position: relative;
+        height: 100%;
+        max-width: 100%; /* 幅を最大に */
+        margin: 0 auto;
+        background-color: var(--bg-primary);
+        box-shadow: 0 0 10px var(--shadow-secondary);
+        overflow: hidden;
     }
-    header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-    .container { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 52px); }
-    .sidebar { border-right: 1px solid var(--border); background: var(--panel); padding: 12px; overflow:auto; }
+    .screen {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.3s ease-in-out;
+        background-color: var(--bg-primary);
+        z-index: 0;
+    }
+    .screen.active {
+        transform: translateX(0);
+        z-index: 1;
+    }
+    #editor-screen { transform: translateX(0); }
+    #left-panel-screen { transform: translateX(-100%); }
+    #settings-screen { transform: translateX(100%); }
+
+    /* --- ヘッダー --- */
+    .app-header {
+        display: flex;
+        align-items: center;
+        padding: 10px 15px;
+        background-color: var(--bg-header);
+        color: var(--text-light);
+        flex-shrink: 0;
+        z-index: 10;
+        gap: 10px;
+    }
+    .app-header h1 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 auto; /* タイトルを中央寄せ */
+    }
+    .header-button {
+        background: none;
+        border: none;
+        color: var(--text-light);
+        font-size: 20px;
+        padding: 5px;
+        line-height: 1;
+        cursor: pointer;
+        min-width: 30px;
+    }
+    #settings-screen .app-header {
+        justify-content: space-between;
+    }
+    #settings-screen .app-header h1 {
+        margin-left: 0;
+    }
+    /* ★変更点: 左パネルのヘッダーレイアウト */
+    #left-panel-screen .app-header {
+        flex-direction: row-reverse; /* 右から配置 */
+        justify-content: flex-start; /* 左寄せにする */
+    }
+    #left-panel-screen .app-header h1 {
+        margin-left: auto;
+        margin-right: 0;
+        text-align: right;
+    }
+    
+    /* --- メインコンテンツ --- */
+    .main-content {
+        flex-grow: 1;
+        overflow-y: auto;
+        overflow-x: hidden; /* 横スクロールは基本不要 */
+        position: relative;
+    }
+    #settings-screen .main-content {
+        padding: 12px;
+    }
+    #editor-screen .main-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden; /* ★変更点: スクロールを禁止 */
+    }
+    
+    /* --- フッター --- */
+    .editor-footer {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding: 10px 15px;
+        background-color: var(--bg-header);
+        flex-shrink: 0;
+        z-index: 10;
+        border-top: 1px solid var(--border);
+    }
+    .footer-btn {
+        flex-grow: 1;
+        max-width: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 8px 15px;
+        border-radius: 5px;
+        border: none;
+        font-size: 14px;
+        background-color: #444; /* PWAフッター風 */
+        color: var(--text-light);
+        transition: background-color 0.2s ease, color 0.2s ease;
+        line-height: 1.4;
+    }
+    .footer-btn:hover { background-color: #555; }
+    .footer-btn .icon { font-size: 1.2em; }
+    .footer-btn.action { background-color: #555; }
+    .footer-btn.action:hover { background-color: #666; }
+
+
+    /* --- ここからエディタ固有のスタイル (一部調整) --- */
     .section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
+    .section:last-child { border-bottom: none; }
     .section h2 { font-size: 14px; margin: 0 0 8px; color: #ddd; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .row input[type="number"], .row input[type="text"], .row input[type="color"], .row select {
@@ -35,7 +170,8 @@
     }
     .btn { background:#222; color:var(--text); border:1px solid var(--border); padding:6px 10px; border-radius:6px; cursor:pointer; }
     .btn:hover { background:#2a2a2a; }
-    .btn.primary { background: var(--accent); border-color: #3b8c3f; color:#fff; }
+    .btn.primary, .footer-btn.primary { background: var(--accent); border-color: #3b8c3f; color:#fff; }
+    .btn.primary:hover, .footer-btn.primary:hover { background-color: #5cb860; }
     .btn.danger { background: #8b2a28; border-color:#7a2020; }
     .muted { color: var(--muted); font-size: 12px; }
     .layers { display: flex; flex-direction: column; gap: 8px; }
@@ -49,210 +185,267 @@
     .stage {
       background: conic-gradient(#ddd 0.25turn, #bbb 0 0.5turn, #ddd 0 0.75turn, #bbb 0) 0 0/24px 24px;
       outline: 1px solid var(--border);
-      image-rendering: pixelated; /* ドット系でも見やすく */
+      image-rendering: pixelated;
       cursor: grab;
       max-width: 100%;
+      max-height: calc(100vh - 150px); /* ヘッダーとフッター分を考慮 */
+      object-fit: contain;
     }
     .stage.dragging { cursor: grabbing; }
-    .hint { padding: 0 16px 16px; color: var(--muted); font-size: 12px; }
+    .hint { padding: 0 16px 16px; color: var(--muted); font-size: 12px; text-align: center; }
     details summary { cursor: pointer; }
     .kbd { background:#222; border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:12px; }
+    /* ★追加: 更新ボタン用 */
+    .danger-zone {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 2px solid var(--danger);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .danger-zone button {
+        width: 100%;
+        background-color: var(--bg-button-update);
+        color: var(--text-light);
+        border: none;
+        padding: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .danger-zone button:hover {
+        background-color: var(--bg-button-update-hover);
+    }
   </style>
 </head>
 <body>
-  <header>
-    <h1>PNG・GIFレイヤー合成・エディター（単一HTML）</h1>
-    <span class="muted">PNG合成 / GIFフレーム合成・出力 / 透過維持オプション</span>
-  </header>
-  <div class="container">
-    <aside class="sidebar">
-      <div class="section">
-        <h2>ファイル読み込み</h2>
-        <div class="row" style="gap:6px; align-items:stretch;">
-          <label class="btn">PNG/GIFを追加<input id="fileInput" type="file" accept="image/png,image/gif" multiple style="display:none"></label>
-          <button class="btn" id="clearAll">全レイヤー削除</button>
-        </div>
-        <div class="muted" style="margin-top:6px">複数可。GIFはフレーム単位で解析します。</div>
-      </div>
+    <div class="app-container">
 
-      <div class="section">
-        <h2>キャンバス</h2>
-        <div class="row">
-          <label>W <input id="canvasW" type="number" min="1" step="1" value="512" style="width:90px"></label>
-          <label>H <input id="canvasH" type="number" min="1" step="1" value="512" style="width:90px"></label>
-          <button class="btn" id="applyCanvas">適用</button>
+        <!-- 左画面 (用途未定) -->
+        <div id="left-panel-screen" class="screen">
+            <header class="app-header">
+                 <!-- ★変更点: 要素の順序 -->
+                 <button id="back-to-editor-from-left" class="header-button" aria-label="エディタへ戻る">＞</button>
+                 <h1>パネル</h1>
+            </header>
+            <main class="main-content">
+                <p style="text-align: center; color: var(--muted); margin-top: 20px;">
+                    （このパネルは将来の機能拡張用です）
+                </p>
+            </main>
         </div>
-        <div class="row" style="margin-top:6px">
-          <button class="btn" id="fitToContent">内容にフィット</button>
-          <label class="row small"><input id="liveFit" type="checkbox"> 自動フィット</label>
-        </div>
-        <details class="small" style="margin-top:6px">
-          <summary>配置補助</summary>
-          <div class="row" style="margin-top:6px">
-            <label class="row small"><input id="snapEnabled" type="checkbox" checked> スナップ</label>
-            <label class="small">グリッド(px) <input id="snapGrid" type="number" min="1" step="1" value="8" style="width:80px"></label>
-            <label class="small">許容(px) <input id="snapTol" type="number" min="1" step="1" value="6" style="width:80px"></label>
-          </div>
-        </details>
-      </div>
 
-      <div class="section">
-        <h2>レイヤー</h2>
-        <div id="layers" class="layers"></div>
-        <div class="muted" style="margin-top:6px">上ほど前面。クリックで選択、キャンバス上でドラッグ移動。</div>
-        <details>
-          <summary>モーション（PNG専用）</summary>
-          <div class="muted small" style="margin:6px 0">選択中のPNGレイヤーに“もちもち”動きを付けます。</div>
-          <div class="row small" style="margin-bottom:6px">
-            <label>タイプ
-              <select id="motionType">
-                <option value="none">なし</option>
-                <option value="squash">もちもち(つぶれ)</option>
-                <option value="float">ふわふわ(上下揺れ)</option>
-                <option value="jelly">ゼリー(拡縮)</option>
-                <option value="orbit">周回(円運動)</option>
-              </select>
-            </label>
-          </div>
-          <div class="row small">
-            <label>振幅 <input id="motionAmp" type="number" step="1" value="10" style="width:80px"></label>
-            <label>速度 <input id="motionSpeed" type="number" step="0.1" value="1.0" style="width:80px"></label>
-            <label>回転 <input id="motionRot" type="number" step="1" value="0" style="width:80px"></label>
-          </div>
-          <div class="row small" style="margin-top:6px">
-            <button class="btn" id="applyMotion">このレイヤーに適用</button>
-            <button class="btn" id="clearMotion">解除</button>
-          </div>
-        </details>
-      </div>
+        <!-- 中央画面 (エディタ本体) -->
+        <div id="editor-screen" class="screen active">
+            <header class="app-header">
+                <button id="goto-left-panel-btn" class="header-button" aria-label="左パネルへ">☰</button>
+                <h1>レイヤーエディタ</h1>
+                <button id="goto-settings-btn" class="header-button" aria-label="設定へ">⚙</button>
+            </header>
+            <main class="main-content">
+                <div class="canvas-wrap">
+                    <canvas id="stage" class="stage" width="512" height="512"></canvas>
+                </div>
+                <div class="hint">
+                    プレビューは実時間で再生されます。重い場合はレイヤー数・サイズを抑えてください。<br>
+                    <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd>: 1px移動 / <kbd>Shift</kbd> + 矢印: 10px移動
+                </div>
+            </main>
+            <footer class="editor-footer">
+                <button class="footer-btn primary" id="savePNG">
+                    <span class="icon">🖼️</span> PNG保存
+                </button>
+                <button class="footer-btn" id="saveGIF">
+                    <span class="icon">🎞️</span> GIF保存
+                </button>
+                 <button class="footer-btn action" id="fitToContent">
+                    <span class="icon">✨</span> 内容にフィット
+                </button>
+            </footer>
+        </div>
 
-      <div class="section">
-        <h2>保存</h2>
-        <div class="row" style="margin-bottom:6px">
-          <button class="btn primary" id="savePNG">PNG保存</button>
-          <button class="btn" id="saveOriginalPNG">選択PNGそのまま保存</button>
-        </div>
-        <details>
-          <summary>GIF出力オプション</summary>
-          <div class="row" style="margin-top:8px">
-            <label class="small">品質 <input id="gifQuality" type="number" min="1" max="30" step="1" value="1" style="width:80px" title="1=最高品質（遅い）/ 30=最低品質（速い）"></label>
-            <span class="small muted">ディザリングは強制OFF</span>
-          </div>
-          <div class="row" style="margin-top:8px">
-            <label class="small">透明しきい <input id="alphaThreshold" type="number" min="0" max="255" step="1" value="0" style="width:80px" title="0=完全透明だけを透明化、>0=半透明も透明化（穴が出やすい）"></label>
-            <label class="small">透明色 <input id="transparentColor" type="color" value="#ff00ff" title="透過に使う色（アート内に存在しない目立つ色を推奨：#FF00FF）"></label>
-            <label class="small">ループ <input id="loop" type="checkbox" checked></label>
-          </div>
-          <div class="muted small" style="margin-top:4px">注意: 透過優先のためGIF出力時のディザリングは自動で無効化されます（フリンジ抑制）。</div>
-          <div class="row" style="margin-top:8px">
-            <label class="small">最大長(秒) <input id="maxDuration" type="number" min="1" max="60" step="1" value="10" style="width:80px"></label>
-            <label class="small">出力FPS <input id="exportFPS" type="number" min="1" max="60" step="1" value="20" style="width:80px"></label>
-          </div>
-          <div class="row" style="margin-top:8px">
-            <label class="small">タイムライン
-              <select id="timelineMode">
-                <option value="boundary" selected>境界のみ</option>
-                <option value="fixed">固定FPSのみ</option>
-                <option value="combined">併用</option>
-              </select>
-            </label>
-            <label class="small">ループ回数 <input id="loopCount" type="number" min="1" step="1" value="1" style="width:80px"></label>
-          </div>
-          <div class="row" style="margin-top:8px">
-            <label class="small">出力スケール(%) <input id="exportScale" type="number" min="10" max="200" step="10" value="100" style="width:80px"></label>
-            <label class="small">フレーム結合 変化閾値(%) <input id="mergeThresh" type="number" min="0" max="100" step="0.5" value="1" style="width:80px"></label>
-            <label class="small">色差しきい(0-255) <input id="mergeDelta" type="number" min="0" max="255" step="1" value="10" style="width:80px"></label>
-            <button class="btn" id="saveGIF">GIF保存</button>
-          </div>
-          <div class="muted small" style="margin-top:4px">ヒント: サイズを小さくしたい場合は 出力スケール↓ / 出力FPS↓ / フレーム結合の閾値↑ を試してください。</div>
-        </details>
-      </div>
+        <!-- 右画面 (設定) -->
+        <div id="settings-screen" class="screen">
+            <header class="app-header">
+                 <button id="back-to-editor-from-settings" class="header-button" aria-label="エディタへ戻る">＜</button>
+                 <h1>設定とツール</h1>
+            </header>
+            <main class="main-content">
+                <!-- ここに元のサイドバーの中身を移動 -->
+                <div class="section">
+                    <h2>ファイル読み込み</h2>
+                    <div class="row" style="gap:6px; align-items:stretch;">
+                      <label class="btn">PNG/GIFを追加<input id="fileInput" type="file" accept="image/png,image/gif" multiple style="display:none"></label>
+                      <button class="btn" id="clearAll">全レイヤー削除</button>
+                    </div>
+                    <div class="muted" style="margin-top:6px">複数可。GIFはフレーム単位で解析します。</div>
+                </div>
 
-      <div class="section" id="pngOptimizeSection">
-        <details id="pngOptimizeDetails"><summary>PNG最適化（詳細）</summary>
-        <div class="row small" style="margin-bottom:6px">
-          <label>モード
-            <select id="pngOptMode">
-              <option value="lossless" selected>ロスレス再圧縮</option>
-              <option value="quant">減色</option>
-            </select>
-          </label>
-          <label>色数
-            <select id="pngOptColors">
-              <option value="256" selected>256</option>
-              <option value="128">128</option>
-              <option value="64">64</option>
-              <option value="32">32</option>
-            </select>
-          </label>
-          <label>ディザ
-            <select id="pngOptDither">
-              <option value="none" selected>なし</option>
-              <option value="fs">Floyd-Steinberg</option>
-            </select>
-          </label>
-          <label>アルファ段階
-            <select id="pngOptAlpha">
-              <option value="256" selected>256</option>
-              <option value="64">64</option>
-              <option value="16">16</option>
-            </select>
-          </label>
-        </div>
-        <div class="row small" style="margin-bottom:6px">
-          <label>対象
-            <select id="pngOptTarget">
-              <option value="composite" selected>合成結果（現在のフレーム）</option>
-              <option value="selected">選択PNG</option>
-            </select>
-          </label>
-          <label class="row small"><input id="pngOptHigh" type="checkbox"> 高圧縮(遅い)</label>
-          <label class="row small"><input id="pngOptUltra" type="checkbox"> 高圧縮(超遅い)</label>
-          <button class="btn primary" id="optimizePNG">最適化して保存</button>
-        </div>
-        <div class="muted small" id="pngOptInfo">UPNG.jsで減色/ロスレス最適化します。ディザは透明縁のにじみ対策のため既定は「なし」です。</div>
-      </details>
-      </div>
+                <div class="section">
+                    <h2>キャンバス</h2>
+                    <div class="row">
+                      <label>W <input id="canvasW" type="number" min="1" step="1" value="512" style="width:90px"></label>
+                      <label>H <input id="canvasH" type="number" min="1" step="1" value="512" style="width:90px"></label>
+                      <button class="btn" id="applyCanvas">適用</button>
+                    </div>
+                    <div class="row" style="margin-top:6px">
+                      <label class="row small"><input id="liveFit" type="checkbox"> 自動フィット</label>
+                    </div>
+                    <details class="small" style="margin-top:6px">
+                      <summary>配置補助</summary>
+                      <div class="row" style="margin-top:6px">
+                        <label class="row small"><input id="snapEnabled" type="checkbox" checked> スナップ</label>
+                        <label class="small">グリッド(px) <input id="snapGrid" type="number" min="1" step="1" value="8" style="width:80px"></label>
+                        <label class="small">許容(px) <input id="snapTol" type="number" min="1" step="1" value="6" style="width:80px"></label>
+                      </div>
+                    </details>
+                </div>
 
-      <div class="section">
-        <details id="framePreviewDetails"><summary>出力フレームプレビュー</summary>
-        <div class="row small" style="margin-bottom:6px">
-          <button class="btn" id="buildPreview">再計算</button>
-          <button class="btn" id="prevFrame">◀ 前</button>
-          <button class="btn" id="nextFrame">次 ▶</button>
-          <label class="row small"><input id="applyMergeInPreview" type="checkbox" checked> 結合をプレビューに反映</label>
-        </div>
-        <div class="row small" style="gap:12px; align-items:center;">
-          <input id="frameIndex" type="range" min="0" max="0" step="1" value="0" style="width:180px">
-          <span id="frameInfo" class="muted">0/0</span>
-        </div>
-        <div style="margin-top:8px; background:#121212; border:1px solid var(--border); border-radius:8px; padding:6px;">
-          <canvas id="frameCanvas" width="256" height="256" style="display:block; width:100%; height:auto; image-rendering: pixelated;"></canvas>
-        </div>
-        <div class="muted small" style="margin-top:6px">現在の設定（最大長・FPS・モーション・レイヤー構成）で生成されるフレームを確認できます。</div>
-      </details>
-      </div>
+                <div class="section">
+                    <h2>レイヤー</h2>
+                    <div id="layers" class="layers"></div>
+                    <div class="muted" style="margin-top:6px">上ほど前面。クリックで選択、キャンバス上でドラッグ移動。</div>
+                    <details>
+                      <summary>モーション（PNG専用）</summary>
+                      <div class="muted small" style="margin:6px 0">選択中のPNGレイヤーに“もちもち”動きを付けます。</div>
+                      <div class="row small" style="margin-bottom:6px">
+                        <label>タイプ
+                          <select id="motionType">
+                            <option value="none">なし</option>
+                            <option value="squash">もちもち(つぶれ)</option>
+                            <option value="float">ふわふわ(上下揺れ)</option>
+                            <option value="jelly">ゼリー(拡縮)</option>
+                            <option value="orbit">周回(円運動)</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div class="row small">
+                        <label>振幅 <input id="motionAmp" type="number" step="1" value="10" style="width:80px"></label>
+                        <label>速度 <input id="motionSpeed" type="number" step="0.1" value="1.0" style="width:80px"></label>
+                        <label>回転 <input id="motionRot" type="number" step="1" value="0" style="width:80px"></label>
+                      </div>
+                      <div class="row small" style="margin-top:6px">
+                        <button class="btn" id="applyMotion">このレイヤーに適用</button>
+                        <button class="btn" id="clearMotion">解除</button>
+                      </div>
+                    </details>
+                </div>
 
-      <div class="section">
-        <details id="helpDetails"><summary>ヘルプ</summary>
-        <div class="muted small">
-          ・キャンバス上ドラッグ: 選択レイヤー移動<br>
-          ・レイヤー項目の不透明度スライダーで透過調整<br>
-          ・GIFはフレーム境界の統合タイムラインで合成。元の遅延を尊重します。<br>
-          ・透明維持: 透明ピクセルを指定色に置換し、その色をGIF透明インデックスに設定します。<br>
-          ・キーボード: 矢印で1px移動、Shift+矢印で10px移動
-        </div>
-      </details>
-      </div>
-    </aside>
+                <div class="section">
+                    <h2>保存オプション</h2>
+                     <div class="row" style="margin-bottom:6px">
+                        <button class="btn" id="saveOriginalPNG">選択PNGそのまま保存</button>
+                     </div>
+                    <details>
+                      <summary>GIF出力オプション</summary>
+                      <div class="row" style="margin-top:8px">
+                        <label class="small">品質 <input id="gifQuality" type="number" min="1" max="30" step="1" value="1" style="width:80px" title="1=最高品質（遅い）/ 30=最低品質（速い）"></label>
+                        <span class="small muted">ディザリングは強制OFF</span>
+                      </div>
+                      <div class="row" style="margin-top:8px">
+                        <label class="small">透明しきい <input id="alphaThreshold" type="number" min="0" max="255" step="1" value="0" style="width:80px" title="0=完全透明だけを透明化、>0=半透明も透明化（穴が出やすい）"></label>
+                        <label class="small">透明色 <input id="transparentColor" type="color" value="#ff00ff" title="透過に使う色（アート内に存在しない目立つ色を推奨：#FF00FF）"></label>
+                        <label class="small">ループ <input id="loop" type="checkbox" checked></label>
+                      </div>
+                      <div class="muted small" style="margin-top:4px">注意: 透過優先のためGIF出力時のディザリングは自動で無効化されます（フリンジ抑制）。</div>
+                      <div class="row" style="margin-top:8px">
+                        <label class="small">最大長(秒) <input id="maxDuration" type="number" min="1" max="60" step="1" value="10" style="width:80px"></label>
+                        <label class="small">出力FPS <input id="exportFPS" type="number" min="1" max="60" step="1" value="20" style="width:80px"></label>
+                      </div>
+                      <div class="row" style="margin-top:8px">
+                        <label class="small">タイムライン
+                          <select id="timelineMode">
+                            <option value="boundary" selected>境界のみ</option>
+                            <option value="fixed">固定FPSのみ</option>
+                            <option value="combined">併用</option>
+                          </select>
+                        </label>
+                        <label class="small">ループ回数 <input id="loopCount" type="number" min="1" step="1" value="1" style="width:80px"></label>
+                      </div>
+                      <div class="row" style="margin-top:8px">
+                        <label class="small">出力スケール(%) <input id="exportScale" type="number" min="10" max="200" step="10" value="100" style="width:80px"></label>
+                        <label class="small">フレーム結合 変化閾値(%) <input id="mergeThresh" type="number" min="0" max="100" step="0.5" value="1" style="width:80px"></label>
+                        <label class="small">色差しきい(0-255) <input id="mergeDelta" type="number" min="0" max="255" step="1" value="10" style="width:80px"></label>
+                      </div>
+                      <div class="muted small" style="margin-top:4px">ヒント: サイズを小さくしたい場合は 出力スケール↓ / 出力FPS↓ / フレーム結合の閾値↑ を試してください。</div>
+                    </details>
+                </div>
 
-    <main>
-      <div class="canvas-wrap">
-        <canvas id="stage" class="stage" width="512" height="512"></canvas>
-      </div>
-      <div class="hint">プレビューは実時間で再生されます。重い場合はレイヤー数・サイズを抑えてください。</div>
-    </main>
-  </div>
+                <div class="section" id="pngOptimizeSection">
+                    <details id="pngOptimizeDetails"><summary>PNG最適化（詳細）</summary>
+                    <div class="row small" style="margin-bottom:6px">
+                      <label>モード
+                        <select id="pngOptMode">
+                          <option value="lossless" selected>ロスレス再圧縮</option>
+                          <option value="quant">減色</option>
+                        </select>
+                      </label>
+                      <label>色数
+                        <select id="pngOptColors">
+                          <option value="256" selected>256</option>
+                          <option value="128">128</option>
+                          <option value="64">64</option>
+                          <option value="32">32</option>
+                        </select>
+                      </label>
+                      <label>ディザ
+                        <select id="pngOptDither">
+                          <option value="none" selected>なし</option>
+                          <option value="fs">Floyd-Steinberg</option>
+                        </select>
+                      </label>
+                      <label>アルファ段階
+                        <select id="pngOptAlpha">
+                          <option value="256" selected>256</option>
+                          <option value="64">64</option>
+                          <option value="16">16</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="row small" style="margin-bottom:6px">
+                      <label>対象
+                        <select id="pngOptTarget">
+                          <option value="composite" selected>合成結果（現在のフレーム）</option>
+                          <option value="selected">選択PNG</option>
+                        </select>
+                      </label>
+                      <label class="row small"><input id="pngOptHigh" type="checkbox"> 高圧縮(遅い)</label>
+                      <label class="row small"><input id="pngOptUltra" type="checkbox"> 高圧縮(超遅い)</label>
+                      <button class="btn primary" id="optimizePNG">最適化して保存</button>
+                    </div>
+                    <div class="muted small" id="pngOptInfo">UPNG.jsで減色/ロスレス最適化します。ディザは透明縁のにじみ対策のため既定は「なし」です。</div>
+                  </details>
+                </div>
+
+                <div class="section">
+                    <details id="framePreviewDetails"><summary>出力フレームプレビュー</summary>
+                    <div class="row small" style="margin-bottom:6px">
+                      <button class="btn" id="buildPreview">再計算</button>
+                      <button class="btn" id="prevFrame">◀ 前</button>
+                      <button class="btn" id="nextFrame">次 ▶</button>
+                      <label class="row small"><input id="applyMergeInPreview" type="checkbox" checked> 結合をプレビューに反映</label>
+                    </div>
+                    <div class="row small" style="gap:12px; align-items:center;">
+                      <input id="frameIndex" type="range" min="0" max="0" step="1" value="0" style="width:180px">
+                      <span id="frameInfo" class="muted">0/0</span>
+                    </div>
+                    <div style="margin-top:8px; background:#121212; border:1px solid var(--border); border-radius:8px; padding:6px;">
+                      <canvas id="frameCanvas" width="256" height="256" style="display:block; width:100%; height:auto; image-rendering: pixelated;"></canvas>
+                    </div>
+                    <div class="muted small" style="margin-top:6px">現在の設定（最大長・FPS・モーション・レイヤー構成）で生成されるフレームを確認できます。</div>
+                  </details>
+                </div>
+                
+                <!-- ★追加: 更新ボタン -->
+                <div class="danger-zone">
+                     <button id="update-app-btn">アプリを更新 (キャッシュクリア)</button>
+                     <p class="muted small" style="text-align:center;">
+                         ※ アプリのファイルが更新された場合に、このボタンで最新版を再取得できます。
+                     </p>
+                </div>
+            </main>
+        </div>
+    </div>
 
   <!-- ===== 依存ライブラリ（インライン）: omggif (デコード) ===== -->
   <script>
@@ -432,8 +625,54 @@
   <!-- ===== アプリ本体 ===== -->
   <script>
   ;(() => {
+    // --- 画面遷移と状態管理 ---
+    const state = {
+        currentScreen: 'editor', // 'editor', 'left-panel', 'settings'
+    };
+
+    const screens = {
+        editor: document.getElementById('editor-screen'),
+        leftPanel: document.getElementById('left-panel-screen'),
+        settings: document.getElementById('settings-screen'),
+    };
+
+    function showScreen(screenName) {
+        state.currentScreen = screenName;
+        // まず全画面を非アクティブに
+        Object.values(screens).forEach(screen => screen.classList.remove('active'));
+        
+        // ターゲットに応じてtransformを設定
+        if (screenName === 'editor') {
+            screens.editor.style.transform = 'translateX(0)';
+            screens.leftPanel.style.transform = 'translateX(-100%)';
+            screens.settings.style.transform = 'translateX(100%)';
+        } else if (screenName === 'left-panel') {
+            screens.editor.style.transform = 'translateX(100%)';
+            screens.leftPanel.style.transform = 'translateX(0)';
+            screens.settings.style.transform = 'translateX(200%)';
+        } else if (screenName === 'settings') {
+            screens.editor.style.transform = 'translateX(-100%)';
+            screens.leftPanel.style.transform = 'translateX(-200%)';
+            screens.settings.style.transform = 'translateX(0)';
+        }
+
+        // ターゲット画面をアクティブにする
+        screens[screenName.replace('-','')]?.classList.add('active'); // 'left-panel' -> 'leftPanel'
+    }
+
+    // ヘッダーボタンのイベントリスナー
+    document.getElementById('goto-left-panel-btn').addEventListener('click', () => showScreen('left-panel'));
+    document.getElementById('goto-settings-btn').addEventListener('click', () => showScreen('settings'));
+    document.getElementById('back-to-editor-from-left').addEventListener('click', () => showScreen('editor'));
+    document.getElementById('back-to-editor-from-settings').addEventListener('click', () => showScreen('editor'));
+    // --- 画面遷移ここまで ---
+    
     const $ = (sel, parent=document) => parent.querySelector(sel);
     const $$ = (sel, parent=document) => Array.from(parent.querySelectorAll(sel));
+    
+    const editorScreen = $('#editor-screen');
+    const settingsScreen = $('#settings-screen');
+    
     const stage = $('#stage');
     const ctx = stage.getContext('2d');
 
@@ -453,47 +692,55 @@
     let selectedId = null;
 
     const ui = {
-      fileInput:  $('#fileInput'),
-      clearAll:   $('#clearAll'),
-      canvasW:    $('#canvasW'),
-      canvasH:    $('#canvasH'),
-      applyCanvas:$('#applyCanvas'),
-      fitToContent: $('#fitToContent'),
-      liveFit:    $('#liveFit'),
-      layers:     $('#layers'),
-      savePNG:    $('#savePNG'),
-      saveGIF:    $('#saveGIF'),
-      gifQuality: $('#gifQuality'),
-      /* gifDither removed: 強制OFF */
-      alphaThreshold: $('#alphaThreshold'),
-      transparentColor: $('#transparentColor'),
-      loop:       $('#loop'),
-      maxDuration:$('#maxDuration'),
-      exportFPS:  $('#exportFPS'),
-      timelineMode: $('#timelineMode'),
-      loopCount: $('#loopCount'),
-      motionType: $('#motionType'),
-      motionAmp:  $('#motionAmp'),
-      motionSpeed:$('#motionSpeed'),
-      motionRot:  $('#motionRot'),
-      applyMotion:$('#applyMotion'),
-      clearMotion:$('#clearMotion'),
-      // Snap settings
-      snapEnabled: $('#snapEnabled'),
-      snapGrid: $('#snapGrid'),
-      snapTol: $('#snapTol'),
-      // PNG Optimize UI
-      pngOptMode:   $('#pngOptMode'),
-      pngOptColors: $('#pngOptColors'),
-      pngOptDither: $('#pngOptDither'),
-      pngOptAlpha:  $('#pngOptAlpha'),
-      pngOptTarget: $('#pngOptTarget'),
-      optimizePNG:  $('#optimizePNG'),
-      pngOptInfo:   $('#pngOptInfo'),
-      pngOptHigh:   $('#pngOptHigh'),
-      pngOptUltra:  $('#pngOptUltra'),
-      applyMergeInPreview: $('#applyMergeInPreview'),
+      // **セレクタの親要素を限定**
+      fileInput:  $('#fileInput', settingsScreen),
+      clearAll:   $('#clearAll', settingsScreen),
+      canvasW:    $('#canvasW', settingsScreen),
+      canvasH:    $('#canvasH', settingsScreen),
+      applyCanvas:$('#applyCanvas', settingsScreen),
+      fitToContent: $('#fitToContent', editorScreen), // フッターに移動
+      liveFit:    $('#liveFit', settingsScreen),
+      layers:     $('#layers', settingsScreen),
+      savePNG:    $('#savePNG', editorScreen), // フッターに移動
+      saveGIF:    $('#saveGIF', editorScreen), // フッターに移動
+      gifQuality: $('#gifQuality', settingsScreen),
+      alphaThreshold: $('#alphaThreshold', settingsScreen),
+      transparentColor: $('#transparentColor', settingsScreen),
+      loop:       $('#loop', settingsScreen),
+      maxDuration:$('#maxDuration', settingsScreen),
+      exportFPS:  $('#exportFPS', settingsScreen),
+      timelineMode: $('#timelineMode', settingsScreen),
+      loopCount: $('#loopCount', settingsScreen),
+      motionType: $('#motionType', settingsScreen),
+      motionAmp:  $('#motionAmp', settingsScreen),
+      motionSpeed:$('#motionSpeed', settingsScreen),
+      motionRot:  $('#motionRot', settingsScreen),
+      applyMotion:$('#applyMotion', settingsScreen),
+      clearMotion:$('#clearMotion', settingsScreen),
+      snapEnabled: $('#snapEnabled', settingsScreen),
+      snapGrid: $('#snapGrid', settingsScreen),
+      snapTol: $('#snapTol', settingsScreen),
+      pngOptMode:   $('#pngOptMode', settingsScreen),
+      pngOptColors: $('#pngOptColors', settingsScreen),
+      pngOptDither: $('#pngOptDither', settingsScreen),
+      pngOptAlpha:  $('#pngOptAlpha', settingsScreen),
+      pngOptTarget: $('#pngOptTarget', settingsScreen),
+      optimizePNG:  $('#optimizePNG', settingsScreen),
+      pngOptInfo:   $('#pngOptInfo', settingsScreen),
+      pngOptHigh:   $('#pngOptHigh', settingsScreen),
+      pngOptUltra:  $('#pngOptUltra', settingsScreen),
+      applyMergeInPreview: $('#applyMergeInPreview', settingsScreen),
+      saveOriginalPNG: $('#saveOriginalPNG', settingsScreen),
+      updateAppBtn: $('#update-app-btn', settingsScreen),
     };
+
+    // ★追加: 更新ボタンのイベントリスナー
+    ui.updateAppBtn.addEventListener('click', () => {
+        if (confirm("アプリのキャッシュをクリアして最新版を再取得しますか？\n(ページがリロードされます)")) {
+            // キャッシュをクリアしてリロード
+            window.location.reload(true);
+        }
+    });
 
     function addLayer(layer){
       layers.push(layer);
@@ -508,6 +755,7 @@
       refreshLayerList();
       if (ui.liveFit.checked) fitCanvasToContent();
     }
+
 
     function moveLayer(id, dir){
       const idx = layers.findIndex(l => l.id === id);
@@ -1087,34 +1335,13 @@
       const elapsed = now - startTime;
       drawAtTimeIntoContext(ctx, elapsed, true);
       drawSelectionOverlay(ctx, elapsed);
-      // drawSelectionHandles: オーバーレイ内でハンドルも描画するため不要
     }
     function loop(){
       renderComposite(performance.now());
       requestAnimationFrame(loop);
     }
     requestAnimationFrame(loop);
-
-    function drawSelectionOverlay(c){
-      const l = layers.find(x=>x.id===selectedId);
-      if (!l || !l.visible) return;
-      c.save();
-      c.lineWidth = 2;
-      c.strokeStyle = '#ff3333';
-      c.fillStyle = '#ff3333';
-      const cx = l.x + l.w/2, cy = l.y + l.h/2;
-      const rad = (Number(l.rot)||0) * Math.PI/180;
-      c.translate(cx, cy); c.rotate(rad);
-      c.strokeRect(-l.w/2, -l.h/2, l.w, l.h);
-      const hs=6; const pts=[
-        [-l.w/2,-l.h/2],[0,-l.h/2],[l.w/2,-l.h/2],
-        [-l.w/2,0],              [l.w/2,0],
-        [-l.w/2,l.h/2],[0,l.h/2],[l.w/2,l.h/2]
-      ];
-      for (const p of pts){ c.fillRect(p[0]-hs/2, p[1]-hs/2, hs, hs); }
-      c.restore();
-    }
-
+    
     // 出力フレームプレビュー
     const fcv = document.getElementById('frameCanvas');
     const fctx = fcv.getContext('2d');
@@ -1158,60 +1385,6 @@
     btnPrev.onclick = ()=> renderFramePreview(Number(finput.value)-1);
     btnNext.onclick = ()=> renderFramePreview(Number(finput.value)+1);
     finput.oninput = ()=> renderFramePreview(Number(finput.value));
-
-    // 初期化時は未構築、必要時に「再計算」を押下
-
-    function computeMaxMsFromUI(frameDur){
-      // ループ回数優先で、各GIFのdurationの最大を1ループ長として採用。
-      const loopCount = Math.max(1, parseInt(ui.loopCount?.value)||1);
-      let maxGifDur = 0;
-      for (const l of layers){
-        if (!l.visible) continue;
-        if (l.type==='gif') maxGifDur = Math.max(maxGifDur, l.gif.duration||0);
-      }
-      const maxS = Math.max(1, Math.min(60, parseInt(ui.maxDuration.value)||10));
-      if (maxGifDur>0) return Math.min(maxS*1000, maxGifDur*loopCount);
-      return maxS*1000;
-    }
-
-    async function simulateMergedTimeline(timeline, frameDur){
-      // saveGIFのフレーム結合ロジックと同等の閾値を使って、実際に残るフレーム群を推定
-      const out = [];
-      const scalePct = Math.max(10, Math.min(200, parseInt(document.getElementById('exportScale').value)||100));
-      const outW = Math.max(1, Math.round(stage.width * scalePct / 100));
-      const outH = Math.max(1, Math.round(stage.height * scalePct / 100));
-      const comp = document.createElement('canvas'); comp.width = stage.width; comp.height = stage.height; const cctx = comp.getContext('2d');
-      const o = document.createElement('canvas'); o.width=outW; o.height=outH; const octx=o.getContext('2d');
-      const mergeThresh = Math.max(0, Math.min(100, parseFloat(document.getElementById('mergeThresh').value)||0));
-      const mergeDelta = Math.max(0, Math.min(255, parseInt(document.getElementById('mergeDelta').value)||10));
-
-      let pendingImage = null; let pendingDelay = 0;
-      function percentChanged(a, b, delta){
-        let diff=0; const n=a.length; // RGBA
-        for (let i=0;i<n;i+=4){
-          const da = Math.abs(a[i]-b[i]) + Math.abs(a[i+1]-b[i+1]) + Math.abs(a[i+2]-b[i+2]) + Math.abs(a[i+3]-b[i+3]);
-          if (da > delta) diff++;
-        }
-        const px = n/4; return (diff/px)*100;
-      }
-
-      for (let i=0;i<timeline.length;i++){
-        const frameTime = timeline[i].t; const delay = timeline[i].d;
-        cctx.clearRect(0,0,comp.width,comp.height);
-        drawAtTimeIntoContext(cctx, frameTime, true);
-        octx.clearRect(0,0,outW,outH);
-        octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
-        octx.drawImage(comp, 0, 0, outW, outH);
-        const imgData = octx.getImageData(0,0,outW,outH);
-        if (!pendingImage) { pendingImage = imgData; pendingDelay = delay; continue; }
-        const changed = percentChanged(pendingImage.data, imgData.data, mergeDelta);
-        if (changed <= mergeThresh) { pendingDelay += delay; continue; }
-        out.push({ t: timeline[i-1].t, d: Math.max(10, pendingDelay|0) });
-        pendingImage = imgData; pendingDelay = delay;
-      }
-      if (pendingImage) out.push({ t: timeline.at(-1).t, d: Math.max(10, pendingDelay|0) });
-      return out;
-    }
 
     function computeMaxMsFromUI(frameDur){
       // ループ回数優先で、各GIFのdurationの最大を1ループ長として採用。
@@ -1314,7 +1487,6 @@
       const l = layers.find(x=>x.id===selectedId);
       if (!l || !l.visible) return;
 
-      // ヘルパー: 斜め矢印（線＋矢尻）
       function drawDiagArrow(ctx, x, y, angle, len){
         ctx.save();
         ctx.translate(x,y);
@@ -1332,7 +1504,6 @@
         ctx.fill();
         ctx.restore();
       }
-      // ヘルパー: 回転アイコン（弧＋矢尻）
       function drawRotateIcon(ctx, x, y, r){
         ctx.save(); ctx.translate(x,y);
         const start = Math.PI*0.3, end = Math.PI*1.7;
@@ -1355,15 +1526,10 @@
       const cx = l.x + l.w/2, cy = l.y + l.h/2;
       const rad = (Number(l.rot)||0) * Math.PI/180;
       c.translate(cx, cy); c.rotate(rad);
-
-      // 枠
       c.strokeRect(-l.w/2, -l.h/2, l.w, l.h);
+      const pad = 10;
+      const len = 14;
 
-      // 各ハンドルのアイコン
-      const pad = 10; // 内側に寄せる
-      const len = 14; // 矢印長さ
-
-      // 辺中央の矢印ボタン（ドラッグで寸法変更）
       function drawEdgeArrow(ctx, x, y, angle){
         ctx.save(); ctx.translate(x,y); ctx.rotate(angle);
         ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.stroke();
@@ -1377,38 +1543,31 @@
       drawEdgeArrow(c, leftMid.x, leftMid.y, Math.PI);
       drawEdgeArrow(c, rightMid.x, rightMid.y, 0);
 
-      // 左上: ミラー（左右反転）ボタン（小さなひし形に左右矢印）
       c.save();
       c.translate(-l.w/2 + pad, -l.h/2 + pad);
       c.beginPath();
       c.moveTo(0,-6); c.lineTo(6,0); c.lineTo(0,6); c.lineTo(-6,0); c.closePath(); c.stroke();
-      // 左右矢印
       c.beginPath(); c.moveTo(-8,0); c.lineTo(-2,0); c.stroke();
       c.beginPath(); c.moveTo(2,0); c.lineTo(8,0); c.stroke();
       c.restore();
-      // 右上: リセット（×ボタン）
       c.save();
       c.translate(l.w/2 - pad, -l.h/2 + pad);
       c.beginPath(); c.moveTo(-6,-6); c.lineTo(6,6); c.moveTo(6,-6); c.lineTo(-6,6); c.stroke();
       c.restore();
 
-      // BR: 等比スケール（中心維持）→ 45°矢印
       drawDiagArrow(c,  l.w/2 - pad,  l.h/2 - pad,  Math.PI/4,  len+2);
-      // BL: 回転 → 円弧+矢尻アイコン
       drawRotateIcon(c, -l.w/2 + pad,  l.h/2 - pad, 8);
 
       c.restore();
     }
 
-    // ドラッグ移動・リサイズ・等比スケール・回転（簡易: 回転時の辺リサイズは未対応）
-    let action = null; // 'move'|'resize-corner'|'resize-edge'|'scale'|'rotate'
+    // ドラッグ移動・リサイズ・等比スケール・回転
+    let action = null;
     let dragOffX=0, dragOffY=0;
-    let resizeCorner = null; // 'tl','tr','bl','br'
-    let resizeEdge = null;   // 'left','right','top','bottom'
-    let startRect = null;    // {x,y,w,h}
-    let startMouse = null;   // {mx,my}
-    let scaleState = null;   // {cx,cy,startW,startH,startDist}
-    let rotateState = null;  // {cx,cy,startAngle,startRot}
+    let resizeEdge = null;
+    let startRect = null;
+    let scaleState = null;
+    let rotateState = null;
 
     function dist(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return Math.hypot(dx,dy); }
     function angle(ax,ay,bx,by){ return Math.atan2(by-ay, bx-ax); }
@@ -1419,83 +1578,59 @@
       const l = layers.find(x => x.id===selectedId);
       if (!l || !l.visible) return;
 
-      const kCorner = 12; // 角ハンドル許容(拡大)
-      const kEdge = 6;   // 辺ヒット許容（現状未使用）
-
-      // 角/ボタン検出（回転後の見た目位置で当たり判定）
+      const kCorner = 12;
+      const bsz = 16;
       const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
       const rad = (Number(l.rot)||0) * Math.PI/180;
       function rotp(dx,dy){ return { x: cxh + (dx*Math.cos(rad) - dy*Math.sin(rad)), y: cyh + (dx*Math.sin(rad) + dy*Math.cos(rad)) }; }
-      // ボタン（左上=ミラー、右上=アスペクト比リセット）先に判定
+      
       const pFlip = rotp(-l.w/2 + 10, -l.h/2 + 10);
-      const pReset = rotp( l.w/2 - 10, -l.h/2 + 10);
-      const bsz = 16; // ボタン当たり判定サイズを拡大
       if (Math.abs(mx - pFlip.x) <= bsz && Math.abs(my - pFlip.y) <= bsz){ l.flipX = !l.flipX; e.preventDefault(); return; }
+      
+      const pReset = rotp( l.w/2 - 10, -l.h/2 + 10);
       if (Math.abs(mx - pReset.x) <= bsz && Math.abs(my - pReset.y) <= bsz){
-        // アスペクト比のみ復元（現在のサイズ感は極力維持）
-        // - 元の比率 r = origW/origH に合わせる
-        // - 現在のW/Hのどちらか片方だけを変更して、変化量が小さい方を採用
         const baseW = l.origW || l.w; const baseH = l.origH || l.h;
         const r = baseW / baseH;
-        const cx = cxh, cy = cyh;
-        // 2案: A) 高さ据え置きで幅を合わせる / B) 幅据え置きで高さを合わせる
         const candA = { w: Math.max(1, Math.round(l.h * r)), h: l.h };
         const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r)) };
-        const costA = Math.abs(candA.w - l.w); // 幅の変更量
-        const costB = Math.abs(candB.h - l.h); // 高さの変更量
+        const costA = Math.abs(candA.w - l.w);
+        const costB = Math.abs(candB.h - l.h);
         const best = (costA <= costB) ? candA : candB;
         l.w = best.w; l.h = best.h;
-        // 中心維持
-        l.x = Math.round(cx - l.w/2);
-        l.y = Math.round(cy - l.h/2);
-        // rotは変更しない
+        l.x = Math.round(cxh - l.w/2);
+        l.y = Math.round(cyh - l.h/2);
         e.preventDefault(); return;
       }
-      // 辺中央の矢印ボタン当たり判定 → action='resize-edge'
-      const topMid = rotp(0, -l.h/2);
-      const bottomMid = rotp(0,  l.h/2);
-      const leftMid = rotp(-l.w/2, 0);
-      const rightMid = rotp( l.w/2, 0);
-      if (Math.abs(mx - topMid.x) <= bsz && Math.abs(my - topMid.y) <= bsz){
-        action='resize-edge'; resizeEdge='top'; startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
-      }
-      if (Math.abs(mx - bottomMid.x) <= bsz && Math.abs(my - bottomMid.y) <= bsz){
-        action='resize-edge'; resizeEdge='bottom'; startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
-      }
-      if (Math.abs(mx - leftMid.x) <= bsz && Math.abs(my - leftMid.y) <= bsz){
-        action='resize-edge'; resizeEdge='left'; startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
-      }
-      if (Math.abs(mx - rightMid.x) <= bsz && Math.abs(my - rightMid.y) <= bsz){
-        action='resize-edge'; resizeEdge='right'; startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
-      }
 
-      // 角（BL=回転、BR=等比スケールのみ）
-      const corners = [
-        {name:'bl', ...rotp(-l.w/2,  l.h/2)},
-        {name:'br', ...rotp( l.w/2,  l.h/2)},
-      ];
+      const topMid = rotp(0, -l.h/2), bottomMid = rotp(0,  l.h/2), leftMid = rotp(-l.w/2, 0), rightMid = rotp( l.w/2, 0);
+      if (Math.abs(mx - topMid.x) <= bsz && Math.abs(my - topMid.y) <= bsz){ action='resize-edge'; resizeEdge='top'; }
+      else if (Math.abs(mx - bottomMid.x) <= bsz && Math.abs(my - bottomMid.y) <= bsz){ action='resize-edge'; resizeEdge='bottom'; }
+      else if (Math.abs(mx - leftMid.x) <= bsz && Math.abs(my - leftMid.y) <= bsz){ action='resize-edge'; resizeEdge='left'; }
+      else if (Math.abs(mx - rightMid.x) <= bsz && Math.abs(my - rightMid.y) <= bsz){ action='resize-edge'; resizeEdge='right'; }
+
+      if (action === 'resize-edge') {
+        startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
+      }
+      
+      const corners = [ {name:'bl', ...rotp(-l.w/2, l.h/2)}, {name:'br', ...rotp( l.w/2, l.h/2)} ];
       for (const c of corners){
         if (Math.abs(mx - c.x) <= kCorner && Math.abs(my - c.y) <= kCorner){
           if (c.name==='br') {
             action = 'scale';
-            const cx = l.x + l.w/2, cy = l.y + l.h/2;
-            scaleState = { cx, cy, startW: l.w, startH: l.h, startDist: Math.max(1, dist(cx,cy,mx,my)) };
-            stage.classList.add('dragging'); e.preventDefault(); return;
-          }
-          if (c.name==='bl') {
+            scaleState = { cx:cxh, cy:cyh, startW: l.w, startH: l.h, startDist: Math.max(1, dist(cxh,cyh,mx,my)) };
+          } else if (c.name==='bl') {
             action = 'rotate';
-            const cx = l.x + l.w/2, cy = l.y + l.h/2;
-            rotateState = { cx, cy, startAngle: angle(cx,cy,mx,my), startRot: Number(l.rot)||0 };
-            stage.classList.add('dragging'); e.preventDefault(); return;
+            rotateState = { cx:cxh, cy:cyh, startAngle: angle(cxh,cyh,mx,my), startRot: Number(l.rot)||0 };
           }
+          stage.classList.add('dragging'); e.preventDefault(); return;
         }
       }
 
+      const mxg = mx - cxh; const myg = my - cyh;
+      const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
+      const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
 
-      // 辺ドラッグ方式は廃止。寸法変更は「各辺の中心にある矢印ボタン」をドラッグして行います。
-
-      // 本体ヒット → 移動（選択中のみ）
-      if (mx>=l.x && my>=l.y && mx<l.x+l.w && my<l.y+l.h){
+      if (Math.abs(lx) < l.w / 2 && Math.abs(ly) < l.h / 2) {
         action = 'move'; stage.classList.add('dragging');
         dragOffX = mx - l.x; dragOffY = my - l.y;
         e.preventDefault();
@@ -1503,68 +1638,54 @@
     });
 
     window.addEventListener('mousemove', (e) => {
-      const l = layers.find(x => x.id===selectedId);
       const rect = stage.getBoundingClientRect();
       const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+      if (!action) { stage.style.cursor = 'grab'; return; }
 
-      // ドラッグ中でなければ、ボタン/ハンドル上では通常矢印カーソル、それ以外は掴む手
-      if (!action) {
-        let cursor = 'grab';
-        if (l && l.visible) {
-          const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
-          const rad = (Number(l.rot)||0) * Math.PI/180;
-          function rotp(dx,dy){ return { x: cxh + (dx*Math.cos(rad) - dy*Math.sin(rad)), y: cyh + (dx*Math.sin(rad) + dy*Math.cos(rad)) }; }
-          const bsz = 16; const kCorner = 12; // ボタン当たり判定サイズを拡大
-          const pFlip = rotp(-l.w/2 + 10, -l.h/2 + 10);
-          const pReset = rotp( l.w/2 - 10, -l.h/2 + 10);
-          const topMid = rotp(0, -l.h/2);
-          const bottomMid = rotp(0,  l.h/2);
-          const leftMid = rotp(-l.w/2, 0);
-          const rightMid = rotp( l.w/2, 0);
-          const corners = [ rotp(-l.w/2,  l.h/2), rotp( l.w/2,  l.h/2) ]; // BL, BR
-          function near(p, size){ return Math.abs(mx - p.x) <= size && Math.abs(my - p.y) <= size; }
-          const over = (
-            near(pFlip, bsz) || near(pReset, bsz) ||
-            near(topMid, bsz) || near(bottomMid, bsz) || near(leftMid, bsz) || near(rightMid, bsz) ||
-            near(corners[0], kCorner) || near(corners[1], kCorner)
-          );
-          if (over) cursor = 'default';
-        }
-        stage.style.cursor = cursor;
-        return;
-      }
-
-      // 以降はドラッグ中の処理（カーソルは .stage.dragging に任せる）
+      const l = layers.find(x => x.id===selectedId);
+      if (!l) return;
 
       if (action==='move'){
         let nx = Math.round(mx - dragOffX); let ny = Math.round(my - dragOffY);
-        const s = (typeof snapRect==='function') ? snapRect(nx, ny, l.w, l.h, l) : {x:nx,y:ny};
+        const s = snapRect(nx, ny, l.w, l.h, l);
         l.x = s.x; l.y = s.y;
-      }
-      else if (action==='resize-corner'){
-        const ox = startRect.x, oy = startRect.y, ow = startRect.w, oh = startRect.h;
-        let nx = ox, ny = oy, nw = ow, nh = oh;
-        if (resizeCorner==='tl'){ nx = Math.min(mx, ox+ow-1); ny = Math.min(my, oy+oh-1); nw = (ox+ow) - nx; nh = (oy+oh) - ny; }
-        if (resizeCorner==='tr'){ ny = Math.min(my, oy+oh-1); nw = Math.max(1, mx - ox); nh = (oy+oh) - ny; }
-        if (resizeCorner==='bl'){ nx = Math.min(mx, ox+ow-1); nw = (ox+ow) - nx; nh = Math.max(1, my - oy); }
-        if (resizeCorner==='br'){ nw = Math.max(1, mx - ox); nh = Math.max(1, my - oy); }
-        const s = (typeof snapRect==='function') ? snapRect(nx, ny, nw, nh, l) : {x:nx,y:ny,w:nw,h:nh};
-        l.x = s.x; l.y = s.y; l.w = s.w; l.h = s.h;
       }
       else if (action==='resize-edge'){
         const ox=startRect.x, oy=startRect.y, ow=startRect.w, oh=startRect.h;
-        const cx=ox+ow/2, cy=oy+oh/2;
-        const rad=(Number(l.rot)||0)*Math.PI/180;
-        const mxg=mx-cx, myg=my-cy;
-        const lx = mxg*Math.cos(-rad) - myg*Math.sin(-rad);
-        const ly = mxg*Math.sin(-rad) + myg*Math.cos(-rad);
-        let nx=ox, ny=oy, nw=ow, nh=oh;
-        if (resizeEdge==='left')  { const newLeft  = cx + Math.max(-ow/2+1, Math.min(lx,  ow/2-1)); nx=newLeft; nw=(ox+ow)-nx; }
-        if (resizeEdge==='right') { const newRight = cx + Math.max(-ow/2+1, Math.min(lx,  ow/2-1)); nw=Math.max(1, newRight - ox); }
-        if (resizeEdge==='top')   { const newTop   = cy + Math.max(-oh/2+1, Math.min(ly,  oh/2-1)); ny=newTop; nh=(oy+oh)-ny; }
-        if (resizeEdge==='bottom'){ const newBot   = cy + Math.max(-oh/2+1, Math.min(ly,  oh/2-1)); nh=Math.max(1, newBot - oy); }
-        const s = (typeof snapRect==='function') ? snapRect(nx, ny, nw, nh, l) : {x:nx,y:ny,w:nw,h:nh};
-        l.x = s.x; l.y = s.y; l.w = s.w; l.h = s.h;
+        const rad = (Number(l.rot)||0) * Math.PI/180;
+        
+        // マウス座標をレイヤーのローカル座標系に変換
+        const mxg=mx-(ox+ow/2), myg=my-(oy+oh/2);
+        const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
+        const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
+
+        let newW = ow, newH = oh, dx = 0, dy = 0;
+
+        if (resizeEdge === 'left') {
+            const newLeftEdge = Math.min(lx, ow/2-1);
+            newW = ow/2 - newLeftEdge;
+            dx = (newLeftEdge + ow/2) / 2;
+        } else if (resizeEdge === 'right') {
+            const newRightEdge = Math.max(lx, -ow/2+1);
+            newW = newRightEdge + ow/2;
+            dx = (newRightEdge - ow/2) / 2;
+        } else if (resizeEdge === 'top') {
+            const newTopEdge = Math.min(ly, oh/2-1);
+            newH = oh/2 - newTopEdge;
+            dy = (newTopEdge + oh/2) / 2;
+        } else if (resizeEdge === 'bottom') {
+            const newBottomEdge = Math.max(ly, -oh/2+1);
+            newH = newBottomEdge + oh/2;
+            dy = (newBottomEdge - oh/2) / 2;
+        }
+
+        const worldDX = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const worldDY = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+        l.x = Math.round(ox + ow/2 - newW/2 + worldDX);
+        l.y = Math.round(oy + oh/2 - newH/2 + worldDY);
+        l.w = Math.max(1, Math.round(newW));
+        l.h = Math.max(1, Math.round(newH));
       }
       else if (action==='scale'){
         const { cx, cy, startW, startH, startDist } = scaleState;
@@ -1572,29 +1693,27 @@
         const sc = Math.max(0.01, curDist / startDist);
         let nw = Math.max(1, Math.round(startW * sc));
         let nh = Math.max(1, Math.round(startH * sc));
-        // 中心維持
         l.w = nw; l.h = nh; l.x = Math.round(cx - nw/2); l.y = Math.round(cy - nh/2);
       }
       else if (action==='rotate'){
         const { cx, cy, startAngle, startRot } = rotateState;
         const ang = angle(cx,cy,mx,my);
         let deltaDeg = (ang - startAngle) * 180 / Math.PI;
-        // Shiftで15度スナップ
         if (e.shiftKey) { deltaDeg = Math.round(deltaDeg/15)*15; }
         l.rot = (startRot + deltaDeg);
       }
     });
 
     window.addEventListener('mouseup', ()=>{
-      action=null; resizeCorner=null; resizeEdge=null; startRect=null; startMouse=null; scaleState=null; rotateState=null; stage.classList.remove('dragging');
+      action=null; resizeEdge=null; startRect=null; scaleState=null; rotateState=null; stage.classList.remove('dragging');
     });
 
     // キー移動
     window.addEventListener('keydown', (e) => {
       const l = layers.find(x => x.id===selectedId); if (!l) return;
       let d = 1;
-      if (e.shiftKey) d = 10;            // 速く
-      if (e.ctrlKey || e.metaKey) d = 50; // もっと速く
+      if (e.shiftKey) d = 10;
+      if (e.ctrlKey || e.metaKey) d = 50;
       if (e.key==='ArrowLeft')  { const s=snapRect(l.x-d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
       if (e.key==='ArrowRight') { const s=snapRect(l.x+d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
       if (e.key==='ArrowUp')    { const s=snapRect(l.x, l.y-d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
