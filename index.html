@@ -69,7 +69,7 @@
     .app-header {
         display: flex;
         align-items: center;
-        justify-content: space-between; /* 要素を均等配置 */
+        justify-content: space-between;
         padding: 10px 15px;
         background-color: var(--bg-header);
         color: var(--text-light);
@@ -80,9 +80,8 @@
     .app-header h1 {
         font-size: 16px;
         font-weight: 600;
-        margin: 0; /* 中央寄せを解除 */
+        margin: 0; /* ★変更点: デフォルトマージンをリセット */
         text-align: center;
-        flex-grow: 1; /* 中央のスペースを埋める */
     }
     .header-button {
         background: none;
@@ -99,7 +98,7 @@
     }
     #settings-screen .app-header h1 {
         text-align: left;
-        margin: 0 auto 0 0; /* 左寄せ */
+        margin: 0 auto 0 0;
     }
     #left-panel-screen .app-header {
         flex-direction: row-reverse;
@@ -110,12 +109,11 @@
         margin-right: 0;
         text-align: right;
     }
-    /* ★追加: ヘッダーのボタングループ */
     .header-group {
         display: flex;
         align-items: center;
         gap: 5px;
-        flex-basis: 100px; /* 左右のグループの幅を確保 */
+        flex-basis: 100px;
     }
     .header-group.left {
         justify-content: flex-start;
@@ -279,10 +277,10 @@
             <header class="app-header">
                 <div class="header-group left">
                     <button id="goto-left-panel-btn" class="header-button" aria-label="左パネルへ">☰</button>
-                    <button id="clearAll" class="header-button danger" aria-label="全レイヤー削除" title="全レイヤー削除">🗑️</button>
                 </div>
                 <h1>レイヤーエディタ</h1>
                 <div class="header-group right">
+                    <button id="clearAll" class="header-button danger" aria-label="全レイヤー削除" title="全レイヤー削除">🗑️</button>
                     <label class="header-button add-file-label" aria-label="ファイルを追加" title="PNG/GIFを追加">
                         +
                         <input id="fileInput" type="file" accept="image/png,image/gif" multiple style="display:none">
@@ -734,7 +732,6 @@
     let selectedId = null;
 
     const ui = {
-      // **セレクタの親要素を限定**
       fileInput:  $('#fileInput', editorScreen),
       clearAll:   $('#clearAll', editorScreen),
       canvasW:    $('#canvasW', settingsScreen),
