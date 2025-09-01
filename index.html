@@ -1732,6 +1732,9 @@
       if (e.key==='ArrowUp')    { const s=snapRect(l.x, l.y-d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
       if (e.key==='ArrowDown')  { const s=snapRect(l.x, l.y+d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
     });
+
+    stage.addEventListener('contextmenu', (e) => e.preventDefault());
+
   })();
   </script>
 </body>
