@@ -37,6 +37,7 @@
         color: var(--text);
         overscroll-behavior-y: contain;
         overflow: hidden; /* bodyでのスクロールを禁止 */
+        touch-action: manipulation; /* ★追加: ダブルタップによるズームを防止 */
     }
     .app-container {
         display: flex;
@@ -244,6 +245,7 @@
     .danger-zone button:hover {
         background-color: var(--bg-button-update-hover);
     }
+
     /* ★修正: ズーム対策 */
     input[type="number"], input[type="text"], input[type="color"], select {
       font-size: 16px;
