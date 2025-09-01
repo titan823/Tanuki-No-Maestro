@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+
   <title>PNG・GIFレイヤー合成・エディター（単一HTML）</title>
   <style>
     /* --- 基本変数 --- */
@@ -263,6 +264,15 @@
       padding: 4px 6px;
       width: 80px !important;
     }
+    /* iOS Safari対応 */
+    .stage {
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
   </style>
 </head>
 <body>
@@ -1538,21 +1548,42 @@
     function dist(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return Math.hypot(dx,dy); }
     function angle(ax,ay,bx,by){ return Math.atan2(by-ay, bx-ax); }
 
-    stage.addEventListener('mousedown', (e) => {
-      const rect = stage.getBoundingClientRect();
-      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
-      const l = layers.find(x => x.id===selectedId);
+    const PointerManager = {
+      isTouch: false,
+      getStageCoordinates(e) {
+        let clientX, clientY;
+        if (e.touches) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+        } else {
+          clientX = e.clientX;
+          clientY = e.clientY;
+        }
+        const rect = stage.getBoundingClientRect();
+        return {
+          x: clientX - rect.left,
+          y: clientY - rect.top
+        };
+      }
+    };
+
+    function handlePointerStart(e) {
+      e.preventDefault();
+      PointerManager.isTouch = e.type.startsWith('touch');
+
+      const { x: mx, y: my } = PointerManager.getStageCoordinates(e);
+      const l = layers.find(x => x.id === selectedId);
       if (!l || !l.visible) return;
 
-      const kCorner = 12;
-      const bsz = 16;
+      const kCorner = 16;
+      const bsz = 20;
       const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
       const rad = (Number(l.rot)||0) * Math.PI/180;
       function rotp(dx,dy){ return { x: cxh + (dx*Math.cos(rad) - dy*Math.sin(rad)), y: cyh + (dx*Math.sin(rad) + dy*Math.cos(rad)) }; }
-      
+
       const pFlip = rotp(-l.w/2 + 10, -l.h/2 + 10);
       if (Math.abs(mx - pFlip.x) <= bsz && Math.abs(my - pFlip.y) <= bsz){ l.flipX = !l.flipX; e.preventDefault(); return; }
-      
+
       const pReset = rotp( l.w/2 - 10, -l.h/2 + 10);
       if (Math.abs(mx - pReset.x) <= bsz && Math.abs(my - pReset.y) <= bsz){
         const baseW = l.origW || l.w; const baseH = l.origH || l.h;
@@ -1577,7 +1608,7 @@
       if (action === 'resize-edge') {
         startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
       }
-      
+
       const corners = [ {name:'bl', ...rotp(-l.w/2, l.h/2)}, {name:'br', ...rotp( l.w/2, l.h/2)} ];
       for (const c of corners){
         if (Math.abs(mx - c.x) <= kCorner && Math.abs(my - c.y) <= kCorner){
@@ -1601,13 +1632,13 @@
         dragOffX = mx - l.x; dragOffY = my - l.y;
         e.preventDefault();
       }
-    });
+    }
 
-    window.addEventListener('mousemove', (e) => {
-      const rect = stage.getBoundingClientRect();
-      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
-      if (!action) { stage.style.cursor = 'grab'; return; }
+    function handlePointerMove(e) {
+      if (PointerManager.isTouch) e.preventDefault();
+      if (!action) return;
 
+      const { x: mx, y: my } = PointerManager.getStageCoordinates(e);
       const l = layers.find(x => x.id===selectedId);
       if (!l) return;
 
@@ -1619,34 +1650,16 @@
       else if (action==='resize-edge'){
         const ox=startRect.x, oy=startRect.y, ow=startRect.w, oh=startRect.h;
         const rad = (Number(l.rot)||0) * Math.PI/180;
-        
         const mxg=mx-(ox+ow/2), myg=my-(oy+oh/2);
         const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
         const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
-
         let newW = ow, newH = oh, dx = 0, dy = 0;
-
-        if (resizeEdge === 'left') {
-            const newLeftEdge = Math.min(lx, ow/2-1);
-            newW = ow/2 - newLeftEdge;
-            dx = (newLeftEdge + ow/2) / 2;
-        } else if (resizeEdge === 'right') {
-            const newRightEdge = Math.max(lx, -ow/2+1);
-            newW = newRightEdge + ow/2;
-            dx = (newRightEdge - ow/2) / 2;
-        } else if (resizeEdge === 'top') {
-            const newTopEdge = Math.min(ly, oh/2-1);
-            newH = oh/2 - newTopEdge;
-            dy = (newTopEdge + oh/2) / 2;
-        } else if (resizeEdge === 'bottom') {
-            const newBottomEdge = Math.max(ly, -oh/2+1);
-            newH = newBottomEdge + oh/2;
-            dy = (newBottomEdge - oh/2) / 2;
-        }
-
+        if (resizeEdge === 'left') { const newLeftEdge = Math.min(lx, ow/2-1); newW = ow/2 - newLeftEdge; dx = (newLeftEdge + ow/2) / 2; }
+        else if (resizeEdge === 'right') { const newRightEdge = Math.max(lx, -ow/2+1); newW = newRightEdge + ow/2; dx = (newRightEdge - ow/2) / 2; }
+        else if (resizeEdge === 'top') { const newTopEdge = Math.min(ly, oh/2-1); newH = oh/2 - newTopEdge; dy = (newTopEdge + oh/2) / 2; }
+        else if (resizeEdge === 'bottom') { const newBottomEdge = Math.max(ly, -oh/2+1); newH = newBottomEdge + oh/2; dy = (newBottomEdge - oh/2) / 2; }
         const worldDX = dx * Math.cos(rad) - dy * Math.sin(rad);
         const worldDY = dx * Math.sin(rad) + dy * Math.cos(rad);
-
         l.x = Math.round(ox + ow/2 - newW/2 + worldDX);
         l.y = Math.round(oy + oh/2 - newH/2 + worldDY);
         l.w = Math.max(1, Math.round(newW));
@@ -1656,25 +1669,29 @@
         const { cx, cy, startW, startH, startDist } = scaleState;
         const curDist = Math.max(1, dist(cx,cy,mx,my));
         const sc = Math.max(0.01, curDist / startDist);
-        let nw = Math.max(1, Math.round(startW * sc));
-        let nh = Math.max(1, Math.round(startH * sc));
+        let nw = Math.max(1, Math.round(startW * sc)); let nh = Math.max(1, Math.round(startH * sc));
         l.w = nw; l.h = nh; l.x = Math.round(cx - nw/2); l.y = Math.round(cy - nh/2);
       }
       else if (action==='rotate'){
         const { cx, cy, startAngle, startRot } = rotateState;
         const ang = angle(cx,cy,mx,my);
         let deltaDeg = (ang - startAngle) * 180 / Math.PI;
-        if (e.shiftKey) { deltaDeg = Math.round(deltaDeg/15)*15; }
         l.rot = (startRot + deltaDeg);
       }
-    });
+    }
 
-    window.addEventListener('mouseup', ()=>{
+    function handlePointerEnd(e) {
+      if (PointerManager.isTouch) e.preventDefault();
       action=null; resizeEdge=null; startRect=null; scaleState=null; rotateState=null; stage.classList.remove('dragging');
-    });
+    }
 
-    window.addEventListener('keydown', (e) => {
-      const l = layers.find(x => x.id===selectedId); if (!l) return;
+    stage.addEventListener('mousedown', handlePointerStart);
+    stage.addEventListener('touchstart', handlePointerStart, { passive: false });
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('touchmove', handlePointerMove, { passive: false });
+    window.addEventListener('mouseup', handlePointerEnd);
+    window.addEventListener('touchend', handlePointerEnd);
+
       let d = 1;
       if (e.shiftKey) d = 10;
       if (e.ctrlKey || e.metaKey) d = 50;
