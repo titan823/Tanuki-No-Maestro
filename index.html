@@ -32,12 +32,12 @@
     /* --- PWAアプリから持ってきた基本レイアウト --- */
     html, body {
         height: 100%;
+        margin: 0; /* ★追加: ブラウザのデフォルトマージンをリセット */
         font-family: var(--font-family);
         background-color: var(--bg-secondary);
         color: var(--text);
         overscroll-behavior-y: contain;
         overflow: hidden; /* bodyでのスクロールを禁止 */
-        touch-action: manipulation; /* ★追加: ダブルタップによるズームを防止 */
     }
     .app-container {
         display: flex;
@@ -220,11 +220,9 @@
       max-height: calc(100vh - 150px);
       object-fit: contain;
       touch-action: none;
-      -webkit-user-select: none;
       user-select: none;
-      -webkit-touch-callout: none;
+      -webkit-user-select: none;
     }
-
 
     .stage.dragging { cursor: grabbing; }
     .hint { padding: 0 16px 16px; color: var(--muted); font-size: 12px; text-align: center; }
@@ -1527,162 +1525,199 @@
       c.restore();
     }
     let action = null;
-    let dragOffX=0, dragOffY=0;
+    let dragOffX = 0, dragOffY = 0;
     let resizeEdge = null;
     let startRect = null;
     let scaleState = null;
     let rotateState = null;
-    const isTouchEnv = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const activePointers = new Map();
+    let pinchState = null;
 
-    function dist(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return Math.hypot(dx,dy); }
-    function angle(ax,ay,bx,by){ return Math.atan2(by-ay, bx-ax); }
-    function canvasXYFromClient(clientX, clientY) {
-        const rect = stage.getBoundingClientRect();
-        return { mx: clientX - rect.left, my: clientY - rect.top };
+    function getCanvasXY(e) {
+      const rect = stage.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top, type: e.pointerType || 'mouse' };
     }
 
-    function handlePointerDown(mx, my) {
-        const l = layers.find(x => x.id===selectedId);
-        if (!l || !l.visible) return;
+    function pointInLayer(l, mx, my) {
+      const cx = l.x + l.w / 2, cy = l.y + l.h / 2;
+      const rad = (Number(l.rot) || 0) * Math.PI / 180;
+      const dx = mx - cx, dy = my - cy;
+      const lx = dx * Math.cos(-rad) - dy * Math.sin(-rad);
+      const ly = dx * Math.sin(-rad) + dy * Math.cos(-rad);
+      return Math.abs(lx) <= l.w / 2 && Math.abs(ly) <= l.h / 2;
+    }
 
-        const handleRadius = isTouchEnv ? 22 : 12;
-        const buttonRadius = isTouchEnv ? 24 : 16;
+    function topLayerAt(mx, my) {
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const l = layers[i];
+        if (!l.visible) continue;
+        if (pointInLayer(l, mx, my)) return l;
+      }
+      return null;
+    }
 
-        const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
-        const rad = (Number(l.rot)||0) * Math.PI/180;
-        function rotp(dx,dy){ return { x: cxh + (dx*Math.cos(rad) - dy*Math.sin(rad)), y: cyh + (dx*Math.sin(rad) + dy*Math.cos(rad)) }; }
-        const near = (ax,ay,bx,by,r) => Math.hypot(ax-bx, ay-by) <= r;
+    function handleRadiusFor(type) {
+      return type === 'touch' ? 22 : 12;
+    }
 
-        const pFlip = rotp(-l.w/2 + 10, -l.h/2 + 10);
-        if (near(mx, my, pFlip.x, pFlip.y, buttonRadius)){ l.flipX = !l.flipX; return; }
-        
-        const pReset = rotp(l.w/2 - 10, -l.h/2 + 10);
-        if (near(mx, my, pReset.x, pReset.y, buttonRadius)){
-            const baseW = l.origW || l.w, baseH = l.origH || l.h;
-            const r = baseW / baseH;
-            const candA = { w: Math.max(1, Math.round(l.h * r)), h: l.h };
-            const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r)) };
-            const best = (Math.abs(candA.w - l.w) <= Math.abs(candB.h - l.h)) ? candA : candB;
-            l.w = best.w; l.h = best.h;
-            l.x = Math.round(cxh - l.w/2); l.y = Math.round(cyh - l.h/2);
-            return;
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0 && e.pointerType !== 'touch') return;
+      stage.setPointerCapture(e.pointerId);
+      e.preventDefault();
+
+      const p = getCanvasXY(e);
+      activePointers.set(e.pointerId, p);
+
+      if (activePointers.size === 2) {
+        const arr = Array.from(activePointers.values());
+        const p1 = arr[0], p2 = arr[1];
+        const l = layers.find(x => x.id === selectedId);
+        if (l) {
+          const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+          pinchState = {
+            startDist: Math.max(1, dist),
+            startAng: ang,
+            startW: l.w, startH: l.h,
+            startRot: Number(l.rot) || 0,
+            startCx: l.x + l.w / 2, startCy: l.y + l.h / 2
+          };
+          action = 'pinch';
         }
+        return;
+      }
 
-        const topMid = rotp(0, -l.h/2), bottomMid = rotp(0,  l.h/2), leftMid = rotp(-l.w/2, 0), rightMid = rotp( l.w/2, 0);
-        if (near(mx, my, topMid.x, topMid.y, handleRadius)){ action='resize-edge'; resizeEdge='top'; }
-        else if (near(mx, my, bottomMid.x, bottomMid.y, handleRadius)){ action='resize-edge'; resizeEdge='bottom'; }
-        else if (near(mx, my, leftMid.x, leftMid.y, handleRadius)){ action='resize-edge'; resizeEdge='left'; }
-        else if (near(mx, my, rightMid.x, rightMid.y, handleRadius)){ action='resize-edge'; resizeEdge='right'; }
+      const lTop = topLayerAt(p.x, p.y);
+      if (lTop && lTop.id !== selectedId) {
+        selectedId = lTop.id;
+        refreshLayerList();
+        syncMotionPanel();
+      }
+      const l = layers.find(x => x.id === selectedId);
+      if (!l || !l.visible) return;
 
-        if (action === 'resize-edge') {
-            startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); return;
-        }
-        
-        const pBL = rotp(-l.w/2, l.h/2);
-        const pBR = rotp(l.w/2, l.h/2);
-        if (near(mx, my, pBR.x, pBR.y, handleRadius)) {
-            action = 'scale';
-            scaleState = { cx:cxh, cy:cyh, startW: l.w, startH: l.h, startDist: Math.max(1, dist(cxh,cyh,mx,my)) };
-            stage.classList.add('dragging'); return;
-        }
-        if (near(mx, my, pBL.x, pBL.y, handleRadius)) {
-            action = 'rotate';
-            rotateState = { cx:cxh, cy:cyh, startAngle: angle(cxh,cyh,mx,my), startRot: Number(l.rot)||0 };
-            stage.classList.add('dragging'); return;
-        }
+      const cxh = l.x + l.w / 2, cyh = l.y + l.h / 2;
+      const rad = (Number(l.rot) || 0) * Math.PI / 180;
+      const r = handleRadiusFor(p.type);
+      function rotp(dx, dy) { return { x: cxh + (dx * Math.cos(rad) - dy * Math.sin(rad)), y: cyh + (dx * Math.sin(rad) + dy * Math.cos(rad)) }; }
+      const near = (ax, ay, bx, by) => Math.hypot(ax-bx, ay-by) <= r;
 
-        const mxg = mx - cxh; const myg = my - cyh;
+      const pFlip = rotp(-l.w / 2 + 10, -l.h / 2 + 10);
+      const pReset = rotp(l.w / 2 - 10, -l.h / 2 + 10);
+      if (near(p.x, p.y, pFlip.x, pFlip.y)) { l.flipX = !l.flipX; return; }
+      if (near(p.x, p.y, pReset.x, pReset.y)) {
+        const baseW = l.origW || l.w, baseH = l.origH || l.h;
+        const r0 = baseW / baseH;
+        const candA = { w: Math.max(1, Math.round(l.h * r0)), h: l.h };
+        const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r0)) };
+        const best = (Math.abs(candA.w - l.w) <= Math.abs(candB.h - l.h)) ? candA : candB;
+        l.w = best.w; l.h = best.h;
+        l.x = Math.round(cxh - l.w / 2);
+        l.y = Math.round(cyh - l.h / 2);
+        return;
+      }
+
+      const topMid = rotp(0, -l.h / 2), bottomMid = rotp(0, l.h / 2), leftMid = rotp(-l.w / 2, 0), rightMid = rotp(l.w / 2, 0);
+      if (near(p.x, p.y, topMid.x, topMid.y)) { action = 'resize-edge'; resizeEdge = 'top'; }
+      else if (near(p.x, p.y, bottomMid.x, bottomMid.y)) { action = 'resize-edge'; resizeEdge = 'bottom'; }
+      else if (near(p.x, p.y, leftMid.x, leftMid.y)) { action = 'resize-edge'; resizeEdge = 'left'; }
+      else if (near(p.x, p.y, rightMid.x, rightMid.y)) { action = 'resize-edge'; resizeEdge = 'right'; }
+      
+      if(action === 'resize-edge') {
+        startRect = { x: l.x, y: l.y, w: l.w, h: l.h }; stage.classList.add('dragging'); return;
+      }
+
+      const bl = rotp(-l.w / 2, l.h / 2);
+      const br = rotp(l.w / 2, l.h / 2);
+      if (near(p.x, p.y, br.x, br.y)) {
+        action = 'scale';
+        scaleState = { cx: cxh, cy: cyh, startW: l.w, startH: l.h, startDist: Math.hypot(br.x - cxh, br.y - cyh) };
+      } else if (near(p.x, p.y, bl.x, bl.y)) {
+        action = 'rotate';
+        rotateState = { cx: cxh, cy: cyh, startAngle: Math.atan2(p.y - cyh, p.x - cxh), startRot: Number(l.rot) || 0 };
+      } else if (pointInLayer(l, p.x, p.y)) {
+        action = 'move';
+        dragOffX = p.x - l.x; dragOffY = p.y - l.y;
+      }
+      
+      if(action) stage.classList.add('dragging');
+    }, { passive: false });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!activePointers.has(e.pointerId)) return;
+      const p = getCanvasXY(e);
+      activePointers.set(e.pointerId, p);
+      e.preventDefault();
+
+      const l = layers.find(x => x.id === selectedId);
+      if (!l || !action) return;
+
+      if (action === 'pinch' && activePointers.size >= 2 && pinchState) {
+        const arr = Array.from(activePointers.values());
+        const p1 = arr[0], p2 = arr[1];
+        const cx = (p1.x + p2.x) / 2, cy = (p1.y + p2.y) / 2;
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+        const sc = Math.max(0.01, dist / pinchState.startDist);
+        l.w = Math.max(1, Math.round(pinchState.startW * sc));
+        l.h = Math.max(1, Math.round(pinchState.startH * sc));
+        l.rot = pinchState.startRot + (ang - pinchState.startAng) * 180 / Math.PI;
+        l.x = Math.round(cx - l.w / 2);
+        l.y = Math.round(cy - l.h / 2);
+        return;
+      }
+      if (activePointers.size > 1) return;
+
+      if (action === 'move') {
+        const s = snapRect(Math.round(p.x - dragOffX), Math.round(p.y - dragOffY), l.w, l.h, l);
+        l.x = s.x; l.y = s.y;
+      } else if (action === 'resize-edge' && startRect) {
+        const {x: ox, y: oy, w: ow, h: oh} = startRect;
+        const rad = (Number(l.rot) || 0) * Math.PI / 180;
+        const mxg = p.x - (ox + ow / 2), myg = p.y - (oy + oh / 2);
         const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
         const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
-        if (Math.abs(lx) < l.w / 2 && Math.abs(ly) < l.h / 2) {
-            action = 'move'; stage.classList.add('dragging');
-            dragOffX = mx - l.x; dragOffY = my - l.y;
-        }
-    }
-    
-    function handlePointerMove(mx, my, useShiftKey) {
-        if (!action) { return; }
-        const l = layers.find(x => x.id===selectedId);
-        if (!l) return;
+        let newW = ow, newH = oh, dx = 0, dy = 0;
 
-        if (action === 'move') {
-            let nx = Math.round(mx - dragOffX); let ny = Math.round(my - dragOffY);
-            const s = snapRect(nx, ny, l.w, l.h, l);
-            l.x = s.x; l.y = s.y;
-        } else if (action === 'resize-edge' && startRect) {
-            const ox=startRect.x, oy=startRect.y, ow=startRect.w, oh=startRect.h;
-            const rad = (Number(l.rot)||0) * Math.PI/180;
-            const mxg=mx-(ox+ow/2), myg=my-(oy+oh/2);
-            const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
-            const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
-            let newW = ow, newH = oh, dx = 0, dy = 0;
-            if (resizeEdge === 'left') { const newLeftEdge = Math.min(lx, ow/2-1); newW = ow/2 - newLeftEdge; dx = (newLeftEdge + ow/2) / 2; }
-            else if (resizeEdge === 'right') { const newRightEdge = Math.max(lx, -ow/2+1); newW = newRightEdge + ow/2; dx = (newRightEdge - ow/2) / 2; }
-            else if (resizeEdge === 'top') { const newTopEdge = Math.min(ly, oh/2-1); newH = oh/2 - newTopEdge; dy = (newTopEdge + oh/2) / 2; }
-            else if (resizeEdge === 'bottom') { const newBottomEdge = Math.max(ly, -oh/2+1); newH = newBottomEdge + oh/2; dy = (newBottomEdge - oh/2) / 2; }
-            const worldDX = dx * Math.cos(rad) - dy * Math.sin(rad);
-            const worldDY = dx * Math.sin(rad) + dy * Math.cos(rad);
-            l.x = Math.round(ox + ow/2 - newW/2 + worldDX);
-            l.y = Math.round(oy + oh/2 - newH/2 + worldDY);
-            l.w = Math.max(1, Math.round(newW));
-            l.h = Math.max(1, Math.round(newH));
-        } else if (action === 'scale' && scaleState) {
-            const { cx, cy, startW, startH, startDist } = scaleState;
-            const curDist = Math.max(1, dist(cx,cy,mx,my));
-            const sc = Math.max(0.01, curDist / startDist);
-            l.w = Math.max(1, Math.round(startW * sc));
-            l.h = Math.max(1, Math.round(startH * sc));
-            l.x = Math.round(cx - l.w/2);
-            l.y = Math.round(cy - l.h/2);
-        } else if (action === 'rotate' && rotateState) {
-            const { cx, cy, startAngle, startRot } = rotateState;
-            const ang = angle(cx,cy,mx,my);
-            let deltaDeg = (ang - startAngle) * 180 / Math.PI;
-            if (useShiftKey) { deltaDeg = Math.round(deltaDeg/15)*15; }
-            l.rot = (startRot + deltaDeg);
-        }
-    }
-    
-    function handlePointerUp() {
-        action=null; resizeEdge=null; startRect=null; scaleState=null; rotateState=null;
-        stage.classList.remove('dragging');
-    }
+        if (resizeEdge === 'left') { const newLeft = Math.min(lx, ow / 2 - 1); newW = ow / 2 - newLeft; dx = (newLeft + ow / 2) / 2; }
+        else if (resizeEdge === 'right') { const newRight = Math.max(lx, -ow / 2 + 1); newW = newRight + ow / 2; dx = (newRight - ow / 2) / 2; }
+        else if (resizeEdge === 'top') { const newTop = Math.min(ly, oh / 2 - 1); newH = oh / 2 - newTop; dy = (newTop + oh / 2) / 2; }
+        else if (resizeEdge === 'bottom') { const newBot = Math.max(ly, -oh / 2 + 1); newH = newBot + oh / 2; dy = (newBot - oh / 2) / 2; }
 
-    stage.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        const { mx, my } = canvasXYFromClient(e.clientX, e.clientY);
-        handlePointerDown(mx, my);
-        e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
-        if (e.buttons === 0) {
-          if (action) handlePointerUp();
-          return;
-        }
-        const { mx, my } = canvasXYFromClient(e.clientX, e.clientY);
-        handlePointerMove(mx, my, e.shiftKey);
-    });
-    window.addEventListener('mouseup', (e) => {
-        if (e.button !== 0) return;
-        handlePointerUp();
-    });
-
-    stage.addEventListener('touchstart', (e) => {
-        const t = e.changedTouches[0];
-        const { mx, my } = canvasXYFromClient(t.clientX, t.clientY);
-        handlePointerDown(mx, my);
-        e.preventDefault();
+        const worldDX = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const worldDY = dx * Math.sin(rad) + dy * Math.cos(rad);
+        l.x = Math.round(ox + ow / 2 - newW / 2 + worldDX);
+        l.y = Math.round(oy + oh / 2 - newH / 2 + worldDY);
+        l.w = Math.max(1, Math.round(newW));
+        l.h = Math.max(1, Math.round(newH));
+      } else if (action === 'scale' && scaleState) {
+        const { cx, cy, startW, startH, startDist } = scaleState;
+        const curDist = Math.max(1, Math.hypot(p.x - cx, p.y - cy));
+        const sc = Math.max(0.01, curDist / startDist);
+        l.w = Math.max(1, Math.round(startW * sc));
+        l.h = Math.max(1, Math.round(startH * sc));
+        l.x = Math.round(cx - l.w / 2);
+        l.y = Math.round(cy - l.h / 2);
+      } else if (action === 'rotate' && rotateState) {
+        const { cx, cy, startAngle, startRot } = rotateState;
+        const ang = Math.atan2(p.y - cy, p.x - cx);
+        let deltaDeg = (ang - startAngle) * 180 / Math.PI;
+        if (e.shiftKey) { deltaDeg = Math.round(deltaDeg / 15) * 15; }
+        l.rot = (startRot + deltaDeg);
+      }
     }, { passive: false });
-    window.addEventListener('touchmove', (e) => {
-        const t = e.changedTouches[0];
-        const { mx, my } = canvasXYFromClient(t.clientX, t.clientY);
-        handlePointerMove(mx, my, false);
-        e.preventDefault();
-    }, { passive: false });
-    window.addEventListener('touchend', handlePointerUp);
-    window.addEventListener('touchcancel', handlePointerUp);
 
-    stage.addEventListener('contextmenu', (e) => e.preventDefault());
+    const endPointerAction = (e) => {
+        activePointers.delete(e.pointerId);
+        if (action === 'pinch' && activePointers.size < 2) {
+            action = null; pinchState = null;
+        }
+        if (activePointers.size === 0) {
+            action = null; resizeEdge = null; startRect = null; scaleState = null; rotateState = null; pinchState = null;
+            stage.classList.remove('dragging');
+        }
+        try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
+    };
 
     window.addEventListener('pointerup', endPointerAction);
     window.addEventListener('pointercancel', endPointerAction);
@@ -1697,9 +1732,6 @@
       if (e.key==='ArrowUp')    { const s=snapRect(l.x, l.y-d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
       if (e.key==='ArrowDown')  { const s=snapRect(l.x, l.y+d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
     });
-
-    stage.addEventListener('contextmenu', (e) => e.preventDefault());
-
   })();
   </script>
 </body>
