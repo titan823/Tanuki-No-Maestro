@@ -90,6 +90,7 @@
         line-height: 1;
         cursor: pointer;
         min-width: 30px;
+        -webkit-text-size-adjust: 100%; /* ★追加: iOSでの自動ズーム防止 */
     }
     #settings-screen .app-header {
         justify-content: space-between;
@@ -97,7 +98,6 @@
     #settings-screen .app-header h1 {
         margin-left: 0;
     }
-    /* ★変更点: 左パネルのヘッダーレイアウト */
     #left-panel-screen .app-header {
         flex-direction: row-reverse; /* 右から配置 */
         justify-content: flex-start; /* 左寄せにする */
@@ -123,7 +123,7 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        overflow: hidden; /* ★変更点: スクロールを禁止 */
+        overflow: hidden; /* スクロールを禁止 */
     }
     
     /* --- フッター --- */
@@ -131,7 +131,7 @@
         display: flex;
         justify-content: center;
         gap: 10px;
-        padding: 10px 15px;
+        padding: 8px 12px; /* ★変更: 上下のパディングを縮小 */
         background-color: var(--bg-header);
         flex-shrink: 0;
         z-index: 10;
@@ -143,16 +143,17 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: 6px; /* ★変更: アイコンとの間隔を少し詰める */
         cursor: pointer;
-        padding: 8px 15px;
+        padding: 6px 12px; /* ★変更: ボタンのパディングを縮小 */
         border-radius: 5px;
         border: none;
-        font-size: 14px;
-        background-color: #444; /* PWAフッター風 */
+        font-size: 13px; /* ★変更: フォントサイズを少し小さく */
+        background-color: #444;
         color: var(--text-light);
         transition: background-color 0.2s ease, color 0.2s ease;
         line-height: 1.4;
+        -webkit-text-size-adjust: 100%; /* ★追加: iOSでの自動ズーム防止 */
     }
     .footer-btn:hover { background-color: #555; }
     .footer-btn .icon { font-size: 1.2em; }
@@ -212,6 +213,7 @@
         padding: 10px;
         border-radius: 5px;
         cursor: pointer;
+        -webkit-text-size-adjust: 100%; /* iOSズーム防止 */
     }
     .danger-zone button:hover {
         background-color: var(--bg-button-update-hover);
@@ -224,7 +226,6 @@
         <!-- 左画面 (用途未定) -->
         <div id="left-panel-screen" class="screen">
             <header class="app-header">
-                 <!-- ★変更点: 要素の順序 -->
                  <button id="back-to-editor-from-left" class="header-button" aria-label="エディタへ戻る">＞</button>
                  <h1>パネル</h1>
             </header>
@@ -445,6 +446,7 @@
                 </div>
             </main>
         </div>
+
     </div>
 
   <!-- ===== 依存ライブラリ（インライン）: omggif (デコード) ===== -->
@@ -748,15 +750,6 @@
       refreshLayerList();
       if (ui.liveFit.checked) fitCanvasToContent();
     }
-
-    function removeLayer(id){
-      layers = layers.filter(l => l.id !== id);
-      if (selectedId === id) selectedId = layers.length ? layers[layers.length-1].id : null;
-      refreshLayerList();
-      if (ui.liveFit.checked) fitCanvasToContent();
-    }
-
-
     function moveLayer(id, dir){
       const idx = layers.findIndex(l => l.id === id);
       if (idx < 0) return;
