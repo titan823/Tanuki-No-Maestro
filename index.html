@@ -211,18 +211,21 @@
     .controls { display:flex; gap:6px; flex-wrap: wrap; align-items:center; }
     .opacity { width: 140px; }
     .canvas-wrap { position: relative; padding: 16px; }
-.stage {
-  background: conic-gradient(#ddd 0.25turn, #bbb 0 0.5turn, #ddd 0 0.75turn, #bbb 0) 0 0/24px 24px;
-  outline: 1px solid var(--border);
-  image-rendering: pixelated;
-  cursor: grab;
-  max-width: 100%;
-  max-height: calc(100vh - 150px);
-  object-fit: contain;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
+    .stage {
+      background: conic-gradient(#ddd 0.25turn, #bbb 0 0.5turn, #ddd 0 0.75turn, #bbb 0) 0 0/24px 24px;
+      outline: 1px solid var(--border);
+      image-rendering: pixelated;
+      cursor: grab;
+      max-width: 100%;
+      max-height: calc(100vh - 150px);
+      object-fit: contain;
+    }
+    .stage {
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
 
     .stage.dragging { cursor: grabbing; }
     .hint { padding: 0 16px 16px; color: var(--muted); font-size: 12px; text-align: center; }
@@ -1526,225 +1529,149 @@
     }
 
     let action = null;
-    let dragOffX = 0, dragOffY = 0;
+    let dragOffX=0, dragOffY=0;
     let resizeEdge = null;
     let startRect = null;
-    let transformState = null;
-    let lastTap = 0;
+    let scaleState = null;
+    let rotateState = null;
 
-    const activePointers = new Map();
+    function dist(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return Math.hypot(dx,dy); }
+    function angle(ax,ay,bx,by){ return Math.atan2(by-ay, bx-ax); }
 
-    function dist(p1, p2) { const dx = p1.x - p2.x, dy = p1.y - p2.y; return Math.hypot(dx, dy); }
-    function angle(p1, p2) { return Math.atan2(p2.y - p1.y, p2.x - p1.x); }
-    function getMidpoint(p1, p2) { return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }; }
-
-    function getPointer(e) {
+    stage.addEventListener('mousedown', (e) => {
       const rect = stage.getBoundingClientRect();
-      return { id: e.pointerId, x: e.clientX - rect.left, y: e.clientY - rect.top, shiftKey: e.shiftKey, type: e.pointerType };
-    }
-    
-    function isPointInRotatedRect(point, layer) {
-      const cx = layer.x + layer.w / 2;
-      const cy = layer.y + layer.h / 2;
-      const rad = -(Number(layer.rot) || 0) * Math.PI / 180;
-      const dx = point.x - cx;
-      const dy = point.y - cy;
-      const localX = dx * Math.cos(rad) - dy * Math.sin(rad);
-      const localY = dx * Math.sin(rad) + dy * Math.cos(rad);
-      return Math.abs(localX) < layer.w / 2 && Math.abs(localY) < layer.h / 2;
-    }
+      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+      const l = layers.find(x => x.id===selectedId);
+      if (!l || !l.visible) return;
 
-    stage.addEventListener('pointerdown', (e) => {
-      stage.setPointerCapture(e.pointerId);
-      activePointers.set(e.pointerId, getPointer(e));
+      const kCorner = 12;
+      const bsz = 16;
+      const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
+      const rad = (Number(l.rot)||0) * Math.PI/180;
+      function rotp(dx,dy){ return { x: cxh + (dx*Math.cos(rad) - dy*Math.sin(rad)), y: cyh + (dx*Math.sin(rad) + dy*Math.cos(rad)) }; }
+      
+      const pFlip = rotp(-l.w/2 + 10, -l.h/2 + 10);
+      if (Math.abs(mx - pFlip.x) <= bsz && Math.abs(my - pFlip.y) <= bsz){ l.flipX = !l.flipX; e.preventDefault(); return; }
+      
+      const pReset = rotp( l.w/2 - 10, -l.h/2 + 10);
+      if (Math.abs(mx - pReset.x) <= bsz && Math.abs(my - pReset.y) <= bsz){
+        const baseW = l.origW || l.w; const baseH = l.origH || l.h;
+        const r = baseW / baseH;
+        const candA = { w: Math.max(1, Math.round(l.h * r)), h: l.h };
+        const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r)) };
+        const costA = Math.abs(candA.w - l.w);
+        const costB = Math.abs(candB.h - l.h);
+        const best = (costA <= costB) ? candA : candB;
+        l.w = best.w; l.h = best.h;
+        l.x = Math.round(cxh - l.w/2);
+        l.y = Math.round(cyh - l.h/2);
+        e.preventDefault(); return;
+      }
 
-      const pointers = Array.from(activePointers.values());
-      const p1 = pointers[0];
+      const topMid = rotp(0, -l.h/2), bottomMid = rotp(0,  l.h/2), leftMid = rotp(-l.w/2, 0), rightMid = rotp( l.w/2, 0);
+      if (Math.abs(mx - topMid.x) <= bsz && Math.abs(my - topMid.y) <= bsz){ action='resize-edge'; resizeEdge='top'; }
+      else if (Math.abs(mx - bottomMid.x) <= bsz && Math.abs(my - bottomMid.y) <= bsz){ action='resize-edge'; resizeEdge='bottom'; }
+      else if (Math.abs(mx - leftMid.x) <= bsz && Math.abs(my - leftMid.y) <= bsz){ action='resize-edge'; resizeEdge='left'; }
+      else if (Math.abs(mx - rightMid.x) <= bsz && Math.abs(my - rightMid.y) <= bsz){ action='resize-edge'; resizeEdge='right'; }
 
-      if (pointers.length === 1) {
-        const l = layers.find(x => x.id === selectedId);
-        if (!l || !l.visible) {
-            const hitLayer = layers.slice().reverse().find(layer => layer.visible && isPointInRotatedRect(p1, layer));
-            if (hitLayer) {
-                selectedId = hitLayer.id;
-                refreshLayerList();
-                syncMotionPanel();
-            }
-            return;
-        }
-
-        const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
-        const rad = (Number(l.rot)||0) * Math.PI/180;
-        function rotp(dx,dy){ return { x: cxh + (dx*Math.cos(rad) - dy*Math.sin(rad)), y: cyh + (dx*Math.sin(rad) + dy*Math.cos(rad)) }; }
-
-        const handleSize = p1.type === 'touch' ? 28 : 16;
-        const cornerSize = p1.type === 'touch' ? 28 : 12;
-
-        const pFlip = rotp(-l.w/2 + 10, -l.h/2 + 10);
-        if (dist(p1, pFlip) <= handleSize) { l.flipX = !l.flipX; e.preventDefault(); return; }
-
-        const pReset = rotp(l.w/2 - 10, -l.h/2 + 10);
-        if (dist(p1, pReset) <= handleSize) {
-          const baseW = l.origW || l.w; const baseH = l.origH || l.h;
-          const r = baseW / baseH;
-          const candA = { w: Math.max(1, Math.round(l.h * r)), h: l.h };
-          const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r)) };
-          const best = (Math.abs(candA.w - l.w) <= Math.abs(candB.h - l.h)) ? candA : candB;
-          l.w = best.w; l.h = best.h;
-          l.x = Math.round(cxh - l.w/2); l.y = Math.round(cyh - l.h/2);
-          e.preventDefault(); return;
-        }
-        
-        const edges = {
-            top: rotp(0, -l.h/2), bottom: rotp(0, l.h/2),
-            left: rotp(-l.w/2, 0), right: rotp(l.w/2, 0)
-        };
-        for (const [edgeName, pos] of Object.entries(edges)) {
-            if (dist(p1, pos) <= handleSize) {
-                action = 'resize-edge'; resizeEdge = edgeName;
-                startRect = { x: l.x, y: l.y, w: l.w, h: l.h };
-                stage.classList.add('dragging'); e.preventDefault(); return;
-            }
-        }
-        
-        const corners = {
-            br: rotp(l.w/2, l.h/2), bl: rotp(-l.w/2, l.h/2)
-        };
-        
-        if (dist(p1, corners.br) <= cornerSize) {
-             action = 'scale';
-             const oppositeCorner = rotp(-l.w/2, -l.h/2);
-             transformState = { startW: l.w, startH: l.h, startDist: dist(p1, oppositeCorner), cx: oppositeCorner.x, cy: oppositeCorner.y };
-             stage.classList.add('dragging'); e.preventDefault(); return;
-        }
-        if (dist(p1, corners.bl) <= cornerSize) {
+      if (action === 'resize-edge') {
+        startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
+      }
+      
+      const corners = [ {name:'bl', ...rotp(-l.w/2, l.h/2)}, {name:'br', ...rotp( l.w/2, l.h/2)} ];
+      for (const c of corners){
+        if (Math.abs(mx - c.x) <= kCorner && Math.abs(my - c.y) <= kCorner){
+          if (c.name==='br') {
+            action = 'scale';
+            scaleState = { cx:cxh, cy:cyh, startW: l.w, startH: l.h, startDist: Math.max(1, dist(cxh,cyh,mx,my)) };
+          } else if (c.name==='bl') {
             action = 'rotate';
-            transformState = { cx: cxh, cy: cyh, startAngle: angle({x:cxh, y:cyh}, p1), startRot: Number(l.rot) || 0 };
-            stage.classList.add('dragging'); e.preventDefault(); return;
+            rotateState = { cx:cxh, cy:cyh, startAngle: angle(cxh,cyh,mx,my), startRot: Number(l.rot)||0 };
+          }
+          stage.classList.add('dragging'); e.preventDefault(); return;
         }
+      }
 
-        if (isPointInRotatedRect(p1, l)) {
-            action = 'move';
-            dragOffX = p1.x - l.x;
-            dragOffY = p1.y - l.y;
-            stage.classList.add('dragging');
-            e.preventDefault();
-        } else {
-            const now = Date.now();
-            if (now - lastTap < 300) { 
-                const hitLayer = layers.slice().reverse().find(layer => layer.visible && isPointInRotatedRect(p1, layer));
-                if(hitLayer) {
-                    selectedId = hitLayer.id;
-                    refreshLayerList();
-                    syncMotionPanel();
-                }
-            }
-            lastTap = now;
-        }
-      } else if (pointers.length === 2) {
-        action = 'touch-transform';
-        const l = layers.find(x => x.id === selectedId);
-        if (!l) return;
-        const p2 = pointers[1];
-        transformState = {
-            startDist: dist(p1, p2),
-            startAngle: angle(p1, p2),
-            startMid: getMidpoint(p1, p2),
-            startW: l.w,
-            startH: l.h,
-            startRot: Number(l.rot) || 0,
-            layerCX: l.x + l.w / 2,
-            layerCY: l.y + l.h / 2,
-        };
-        stage.classList.add('dragging');
+      const mxg = mx - cxh; const myg = my - cyh;
+      const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
+      const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
+
+      if (Math.abs(lx) < l.w / 2 && Math.abs(ly) < l.h / 2) {
+        action = 'move'; stage.classList.add('dragging');
+        dragOffX = mx - l.x; dragOffY = my - l.y;
+        e.preventDefault();
       }
     });
 
-    stage.addEventListener('pointermove', (e) => {
-      if (activePointers.size === 0 || !action) return;
-      activePointers.set(e.pointerId, getPointer(e));
-      
-      const pointers = Array.from(activePointers.values());
-      const p1 = pointers[0];
-      const l = layers.find(x => x.id === selectedId);
+    window.addEventListener('mousemove', (e) => {
+      const rect = stage.getBoundingClientRect();
+      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+      if (!action) { stage.style.cursor = 'grab'; return; }
+
+      const l = layers.find(x => x.id===selectedId);
       if (!l) return;
 
-      if (action === 'move' && pointers.length === 1) {
-        let nx = Math.round(p1.x - dragOffX);
-        let ny = Math.round(p1.y - dragOffY);
+      if (action==='move'){
+        let nx = Math.round(mx - dragOffX); let ny = Math.round(my - dragOffY);
         const s = snapRect(nx, ny, l.w, l.h, l);
         l.x = s.x; l.y = s.y;
-      } else if (action === 'resize-edge') {
+      }
+      else if (action==='resize-edge'){
         const ox=startRect.x, oy=startRect.y, ow=startRect.w, oh=startRect.h;
-        const rad = -(Number(l.rot)||0) * Math.PI/180;
-        const cxh = ox+ow/2, cyh = oy+oh/2;
-        const mxg=p1.x-cxh, myg=p1.y-cyh;
-        const lx = mxg * Math.cos(rad) - myg * Math.sin(rad);
-        const ly = mxg * Math.sin(rad) + myg * Math.cos(rad);
-        let newW = ow, newH = oh, dx = 0, dy = 0;
-        if (resizeEdge === 'left') { const newLeft = Math.min(lx, ow/2-1); newW = ow/2 - newLeft; dx = (newLeft + ow/2)/2; }
-        else if (resizeEdge === 'right') { const newRight = Math.max(lx, -ow/2+1); newW = newRight + ow/2; dx = (newRight - ow/2)/2; }
-        else if (resizeEdge === 'top') { const newTop = Math.min(ly, oh/2-1); newH = oh/2 - newTop; dy = (newTop + oh/2)/2; }
-        else if (resizeEdge === 'bottom') { const newBottom = Math.max(ly, -oh/2+1); newH = newBottom + oh/2; dy = (newBottom - oh/2)/2; }
-        const worldDX = dx * Math.cos(-rad) - dy * Math.sin(-rad);
-        const worldDY = dx * Math.sin(-rad) + dy * Math.cos(-rad);
-        l.w = Math.max(1, Math.round(newW)); l.h = Math.max(1, Math.round(newH));
-        l.x = Math.round(cxh - l.w/2 + worldDX); l.y = Math.round(cyh - l.h/2 + worldDY);
-      } else if (action === 'scale') {
-        const { startW, startH, startDist, cx, cy } = transformState;
-        const curDist = dist(p1, {x:cx, y:cy});
-        const sc = Math.max(0.01, curDist / startDist);
-        const nw = Math.max(1, Math.round(startW * sc));
-        const nh = Math.max(1, Math.round(startH * sc));
-        const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
-        l.w = nw; l.h = nh; l.x = Math.round(cxh - nw/2); l.y = Math.round(cyh - nh/2);
-      } else if (action === 'rotate') {
-        const { cx, cy, startAngle, startRot } = transformState;
-        const ang = angle({x:cx, y:cy}, p1);
-        let deltaDeg = (ang - startAngle) * 180 / Math.PI;
-        if (p1.shiftKey) { deltaDeg = Math.round(deltaDeg/15)*15; }
-        l.rot = startRot + deltaDeg;
-      } else if (action === 'touch-transform' && pointers.length >= 2) {
-          const p2 = pointers[1];
-          const scale = dist(p1, p2) / transformState.startDist;
-          const angleDelta = angle(p1, p2) - transformState.startAngle;
-          const currentMid = getMidpoint(p1, p2);
-          
-          l.w = Math.max(10, Math.round(transformState.startW * scale));
-          l.h = Math.max(10, Math.round(transformState.startH * scale));
-          l.rot = transformState.startRot + (angleDelta * 180 / Math.PI);
+        const rad = (Number(l.rot)||0) * Math.PI/180;
+        
+        const mxg=mx-(ox+ow/2), myg=my-(oy+oh/2);
+        const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
+        const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
 
-          const initialVector = {
-              x: transformState.layerCX - transformState.startMid.x,
-              y: transformState.layerCY - transformState.startMid.y
-          };
-          const rotatedVector = {
-              x: initialVector.x * Math.cos(angleDelta) - initialVector.y * Math.sin(angleDelta),
-              y: initialVector.x * Math.sin(angleDelta) + initialVector.y * Math.cos(angleDelta)
-          };
-          
-          l.x = Math.round(currentMid.x + rotatedVector.x * scale - l.w / 2);
-          l.y = Math.round(currentMid.y + rotatedVector.y * scale - l.h / 2);
+        let newW = ow, newH = oh, dx = 0, dy = 0;
+
+        if (resizeEdge === 'left') {
+            const newLeftEdge = Math.min(lx, ow/2-1);
+            newW = ow/2 - newLeftEdge;
+            dx = (newLeftEdge + ow/2) / 2;
+        } else if (resizeEdge === 'right') {
+            const newRightEdge = Math.max(lx, -ow/2+1);
+            newW = newRightEdge + ow/2;
+            dx = (newRightEdge - ow/2) / 2;
+        } else if (resizeEdge === 'top') {
+            const newTopEdge = Math.min(ly, oh/2-1);
+            newH = oh/2 - newTopEdge;
+            dy = (newTopEdge + oh/2) / 2;
+        } else if (resizeEdge === 'bottom') {
+            const newBottomEdge = Math.max(ly, -oh/2+1);
+            newH = newBottomEdge + oh/2;
+            dy = (newBottomEdge - oh/2) / 2;
+        }
+
+        const worldDX = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const worldDY = dx * Math.sin(rad) + dy * Math.cos(rad);
+
+        l.x = Math.round(ox + ow/2 - newW/2 + worldDX);
+        l.y = Math.round(oy + oh/2 - newH/2 + worldDY);
+        l.w = Math.max(1, Math.round(newW));
+        l.h = Math.max(1, Math.round(newH));
+      }
+      else if (action==='scale'){
+        const { cx, cy, startW, startH, startDist } = scaleState;
+        const curDist = Math.max(1, dist(cx,cy,mx,my));
+        const sc = Math.max(0.01, curDist / startDist);
+        let nw = Math.max(1, Math.round(startW * sc));
+        let nh = Math.max(1, Math.round(startH * sc));
+        l.w = nw; l.h = nh; l.x = Math.round(cx - nw/2); l.y = Math.round(cy - nh/2);
+      }
+      else if (action==='rotate'){
+        const { cx, cy, startAngle, startRot } = rotateState;
+        const ang = angle(cx,cy,mx,my);
+        let deltaDeg = (ang - startAngle) * 180 / Math.PI;
+        if (e.shiftKey) { deltaDeg = Math.round(deltaDeg/15)*15; }
+        l.rot = (startRot + deltaDeg);
       }
     });
-    
-    function onPointerUp(e) {
-      stage.releasePointerCapture(e.pointerId);
-      activePointers.delete(e.pointerId);
-      if (activePointers.size < 2) {
-         action = null;
-      }
-      if (activePointers.size === 0) {
-        resizeEdge = null;
-        startRect = null;
-        transformState = null;
-        stage.classList.remove('dragging');
-      }
-    }
 
-    stage.addEventListener('pointerup', onPointerUp);
-    stage.addEventListener('pointercancel', onPointerUp);
-    stage.addEventListener('pointerleave', onPointerUp);
+    window.addEventListener('mouseup', ()=>{
+      action=null; resizeEdge=null; startRect=null; scaleState=null; rotateState=null; stage.classList.remove('dragging');
+    });
 
     window.addEventListener('keydown', (e) => {
       const l = layers.find(x => x.id===selectedId); if (!l) return;
