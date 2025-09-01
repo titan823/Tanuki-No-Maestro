@@ -16,7 +16,6 @@
       --border: #2a2a2a;
       --danger: #ef5350;
       
-      /* PWAアプリから持ってきた変数 */
       --bg-primary: var(--panel);
       --bg-secondary: var(--bg);
       --bg-tertiary: #252525;
@@ -29,20 +28,21 @@
     }
     * { box-sizing: border-box; }
     
-    /* --- PWAアプリから持ってきた基本レイアウト --- */
+    /* --- 基本レイアウト --- */
     html, body {
         height: 100%;
         font-family: var(--font-family);
         background-color: var(--bg-secondary);
         color: var(--text);
         overscroll-behavior-y: contain;
-        overflow: hidden; /* bodyでのスクロールを禁止 */
+        overflow: hidden;
+        touch-action: none; /* ★変更点: ダブルタップズームなどを禁止 */
     }
     .app-container {
         display: flex;
         position: relative;
         height: 100%;
-        max-width: 100%; /* 幅を最大に */
+        max-width: 100%;
         margin: 0 auto;
         background-color: var(--bg-primary);
         box-shadow: 0 0 10px var(--shadow-secondary);
@@ -79,7 +79,7 @@
     .app-header h1 {
         font-size: 16px;
         font-weight: 600;
-        margin: 0 auto; /* タイトルを中央寄せ */
+        margin: 0 auto;
     }
     .header-button {
         background: none;
@@ -91,38 +91,37 @@
         cursor: pointer;
         min-width: 30px;
     }
-    #settings-screen .app-header {
-        justify-content: space-between;
-    }
-    #settings-screen .app-header h1 {
-        margin-left: 0;
-    }
-    #left-panel-screen .app-header {
-        flex-direction: row-reverse; /* 右から配置 */
-        justify-content: flex-start; /* 左寄せにする */
-    }
-    #left-panel-screen .app-header h1 {
-        margin-left: auto;
-        margin-right: 0;
-        text-align: right;
+    #settings-screen .app-header { justify-content: space-between; }
+    #settings-screen .app-header h1 { margin-left: 0; }
+    #left-panel-screen .app-header { flex-direction: row-reverse; justify-content: flex-start; }
+    #left-panel-screen .app-header h1 { margin-left: auto; margin-right: 0; text-align: right; }
+    /* ★追加: ヘッダーのファイル追加ボタン */
+    .header-button.file-add-btn {
+        font-size: 18px;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
     
     /* --- メインコンテンツ --- */
     .main-content {
         flex-grow: 1;
         overflow-y: auto;
-        overflow-x: hidden; /* 横スクロールは基本不要 */
+        overflow-x: hidden;
         position: relative;
+        /* ★変更点: タッチ操作を許可 */
+        touch-action: pan-y;
     }
-    #settings-screen .main-content {
-        padding: 12px;
-    }
+    #settings-screen .main-content { padding: 12px; }
     #editor-screen .main-content {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        overflow: hidden; /* スクロールを禁止 */
+        overflow: hidden;
+        /* ★変更点: キャンバスエリアのタッチ操作を有効化 */
+        touch-action: auto;
     }
     
     /* --- フッター --- */
@@ -144,7 +143,7 @@
         justify-content: center;
         gap: 8px;
         cursor: pointer;
-        padding: 4px 12px; /* ★変更点: 高さをスリムにする */
+        padding: 4px 12px; /* スリムな高さ */
         border-radius: 5px;
         border: none;
         font-size: 14px;
@@ -158,7 +157,7 @@
     .footer-btn.action { background-color: #555; }
     .footer-btn.action:hover { background-color: #666; }
 
-    /* --- ここからエディタ固有のスタイル (一部調整) --- */
+    /* --- エディタ固有のスタイル --- */
     .section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
     .section:last-child { border-bottom: none; }
     .section h2 { font-size: 14px; margin: 0 0 8px; color: #ddd; }
@@ -179,7 +178,7 @@
     .small { font-size: 12px; }
     .controls { display:flex; gap:6px; flex-wrap: wrap; align-items:center; }
     .opacity { width: 140px; }
-    .canvas-wrap { position: relative; padding: 16px; }
+    .canvas-wrap { position: relative; padding: 16px; touch-action: none; } /* キャンバス操作エリアのデフォルトタッチを無効化 */
     .stage {
       background: conic-gradient(#ddd 0.25turn, #bbb 0 0.5turn, #ddd 0 0.75turn, #bbb 0) 0 0/24px 24px;
       outline: 1px solid var(--border);
@@ -211,12 +210,11 @@
         cursor: pointer;
         font-size: 14px;
     }
-    .danger-zone button:hover {
-        background-color: var(--bg-button-update-hover);
-    }
-    /* ★追加: ズーム防止 */
+    .danger-zone button:hover { background-color: var(--bg-button-update-hover); }
+    
+    /* ★変更点: ズーム防止 */
     input[type="number"], input[type="text"], input[type="color"], select {
-      font-size: 16px; /* iPhoneでの自動ズーム防止 */
+      font-size: 16px;
     }
     .small input[type="number"], .small select {
       font-size: 16px;
@@ -225,15 +223,12 @@
       padding: 8px 10px;
       width: 100px !important;
     }
-    .row.small {
-      align-items: center;
-    }
+    .row.small { align-items: center; }
   </style>
 </head>
 <body>
     <div class="app-container">
 
-        <!-- 左画面 (用途未定) -->
         <div id="left-panel-screen" class="screen">
             <header class="app-header">
                  <button id="back-to-editor-from-left" class="header-button" aria-label="エディタへ戻る">＞</button>
@@ -246,10 +241,14 @@
             </main>
         </div>
 
-        <!-- 中央画面 (エディタ本体) -->
         <div id="editor-screen" class="screen active">
             <header class="app-header">
                 <button id="goto-left-panel-btn" class="header-button" aria-label="左パネルへ">☰</button>
+                <label class="header-button file-add-btn">
+                    🖼️+
+                    <input id="fileInput" type="file" accept="image/png,image/gif" multiple style="display:none">
+                </label>
+                <button id="clearAll" class="header-button" title="全レイヤー削除">🗑️</button>
                 <h1>レイヤーエディタ</h1>
                 <button id="goto-settings-btn" class="header-button" aria-label="設定へ">⚙</button>
             </header>
@@ -275,7 +274,6 @@
             </footer>
         </div>
 
-        <!-- 右画面 (設定) -->
         <div id="settings-screen" class="screen">
             <header class="app-header">
                  <button id="back-to-editor-from-settings" class="header-button" aria-label="エディタへ戻る">＜</button>
@@ -284,18 +282,15 @@
             <main class="main-content">
                 <div class="section">
                     <h2>ファイル読み込み</h2>
-                    <div class="row" style="gap:6px; align-items:stretch;">
-                      <label class="btn">PNG/GIFを追加<input id="fileInput" type="file" accept="image/png,image/gif" multiple style="display:none"></label>
-                      <button class="btn" id="clearAll">全レイヤー削除</button>
-                    </div>
-                    <div class="muted" style="margin-top:6px">複数可。GIFはフレーム単位で解析します。</div>
+                    <!-- ★ボタンはメイン画面に移動 -->
+                    <div class="muted" style="margin-top:6px">ファイルはメイン画面ヘッダーの「🖼️+」ボタンから追加します。</div>
                 </div>
 
                 <div class="section">
                     <h2>キャンバス</h2>
                     <div class="row">
-                      <label>W <input id="canvasW" type="number" min="1" step="1" value="512" style="width:90px"></label>
-                      <label>H <input id="canvasH" type="number" min="1" step="1" value="512" style="width:90px"></label>
+                      <label>W <input id="canvasW" type="number" min="1" step="1" value="512"></label>
+                      <label>H <input id="canvasH" type="number" min="1" step="1" value="512"></label>
                       <button class="btn" id="applyCanvas">適用</button>
                     </div>
                     <div class="row" style="margin-top:6px">
@@ -456,155 +451,10 @@
         </div>
     </div>
 
-  <!-- ===== 依存ライブラリ（インライン）: omggif (デコード) ===== -->
+  <!-- ===== 依存ライブラリ（インライン） ===== -->
   <script>
-  // omggif.js (Dean McNamee) - Decoder only (GifReader)
-  // Source: https://github.com/deanm/omggif/blob/master/omggif.js (embedded)
-  // Trimmed to expose window.GifReader
-  (function(){
-    function GifReader(buf) {
-      var p = 0;
-      if (buf[0] !== 0x47 || buf[1] !== 0x49 || buf[2] !== 0x46 || buf[3] !== 0x38 || buf[5] !== 0x61)
-        throw new Error('Invalid GIF 87a/89a header.');
-      var width = buf[6] | (buf[7] << 8);
-      var height = buf[8] | (buf[9] << 8);
-      var pf0 = buf[10];
-      var gctFlag = pf0 & 0x80;
-      var gctSize = 2 << (pf0 & 7);
-      var bgColorIndex = buf[11];
-      var pixelAspectRatio = buf[12];
-      var gct = null;
-      p = 13;
-      if (gctFlag) { gct = buf.slice(p, p + 3 * gctSize); p += 3 * gctSize; }
-      var frames = [];
-      var gce = {};
-      while (true) {
-        var blockId = buf[p++];
-        if (blockId === 0x3b) break; // trailer
-        else if (blockId === 0x21) { // extension
-          var label = buf[p++];
-          if (label === 0xf9) { // GCE
-            var blockSize = buf[p++];
-            var bits = buf[p++];
-            var delay = buf[p++] | (buf[p++] << 8);
-            var transIndex = buf[p++];
-            var terminator = buf[p++];
-            gce = {
-              disposal: (bits >> 2) & 7,
-              userInput: !!(bits & 2),
-              transparent: !!(bits & 1),
-              transIndex: transIndex,
-              delay: delay
-            };
-          } else { // skip other extension types
-            var blockSize = buf[p++];
-            p += blockSize;
-            while (buf[p] !== 0) { var sub = buf[p++]; p += sub; }
-            p++;
-          }
-        } else if (blockId === 0x2c) { // image descriptor
-          var x = buf[p++] | (buf[p++] << 8);
-          var y = buf[p++] | (buf[p++] << 8);
-          var w = buf[p++] | (buf[p++] << 8);
-          var h = buf[p++] | (buf[p++] << 8);
-          var pf = buf[p++];
-          var lctFlag = pf & 0x80;
-          var interlace = pf & 0x40;
-          var lctSize = 2 << (pf & 7);
-          var lct = null;
-          if (lctFlag) { lct = buf.slice(p, p + 3 * lctSize); p += 3 * lctSize; }
-          var lzwMin = buf[p++];
-          // read image data blocks
-          var codes = [];
-          while (true) { var size = buf[p++]; if (size === 0) break; codes.push.apply(codes, buf.slice(p, p + size)); p += size; }
-          frames.push({x:x,y:y,w:w,h:h,interlace:!!interlace,lct:lct,gct:gct,bg: bgColorIndex, delay: (gce.delay||0), disposal:(gce.disposal||0), transparent:gce.transparent||false, transIndex: (gce.transparent? (gce.transIndex|0) : -1), lzwMin:lzwMin|0, codes:new Uint8Array(codes)});
-          gce = {};
-        } else throw new Error('Unknown block: 0x'+blockId.toString(16));
-      }
-      this.width = width; this.height = height; this.frames = frames;
-    }
-    // A minimal LZW decoder + blitter to RGBA with simple disposal handling.
-    GifReader.prototype.numFrames = function(){ return this.frames.length; };
-    GifReader.prototype.frameInfo = function(i){
-      var f=this.frames[i];
-      return {x:f.x,y:f.y,width:f.w,height:f.h,delay:f.delay,disposal:f.disposal,transparent:f.transparent};
-    };
-    function lzwDecode(minCodeSize, data, out) {
-      var clearCode = 1 << minCodeSize;
-      var eoiCode = clearCode + 1;
-      var codeSize = minCodeSize + 1;
-      var dict = [];
-      var bi = 0; // byte index
-      var bitPos = 0; // 0..7 within current byte
-      function readCode() {
-        var code = 0, bitsRead = 0;
-        while (bitsRead < codeSize) {
-          if (bi >= data.length) return eoiCode;
-          var b = data[bi];
-          var remaining = 8 - bitPos;
-          var take = Math.min(codeSize - bitsRead, remaining);
-          code |= ((b >> bitPos) & ((1 << take) - 1)) << bitsRead;
-          bitPos += take;
-          if (bitPos >= 8) { bitPos = 0; bi++; }
-          bitsRead += take;
-        }
-        return code;
-      }
-      var code, prev = null, outPos = 0;
-      for (var i=0; i<clearCode; i++) dict[i] = [i];
-      dict[clearCode] = []; dict[eoiCode] = null;
-      while ((code = readCode()) !== eoiCode) {
-        if (code === clearCode) { dict = []; for (i=0;i<clearCode;i++) dict[i]=[i]; dict[clearCode]=[]; dict[eoiCode]=null; codeSize=minCodeSize+1; prev=null; continue; }
-        var entry;
-        if (dict[code]) { entry = dict[code].slice(0); }
-        else if (code === dict.length && prev) { entry = prev.concat(prev[0]); }
-        else { break; }
-        for (i=0;i<entry.length;i++) out[outPos++] = entry[i];
-        if (prev) dict.push(prev.concat(entry[0]));
-        prev = entry;
-        if (dict.length === (1<<codeSize) && codeSize < 12) codeSize++;
-      }
-      return out.subarray(0, outPos);
-    }
-    GifReader.prototype.decodeAndBlitFrameRGBA = function(i, rgba) {
-      var f = this.frames[i];
-      var width = this.width|0, height=this.height|0;
-      // Build palette
-      var pal = f.lct || f.gct || null;
-      if (!pal) throw new Error('Missing color table');
-      // LZW decode indices
-      var indexStream = lzwDecode(f.lzwMin|0, f.codes, new Uint8Array(f.w*f.h));
-      var pi=0;
-      var stride = width*4;
-      if (f.interlace) {
-        var pass_starts = [0,4,2,1];
-        var pass_steps  = [8,8,4,2];
-        for (var pass=0; pass<4; pass++) {
-          for (var y=pass_starts[pass]; y<f.h; y+=pass_steps[pass]) {
-            var dst = ((y+f.y)*width + f.x) * 4;
-            for (var x=0; x<f.w; x++) {
-              var idx = indexStream[pi++];
-              if (f.transparent && idx===f.transIndex) { dst += 4; continue; }
-              var p3 = idx*3; var r = pal[p3]|0, g=pal[p3+1]|0, b=pal[p3+2]|0;
-              rgba[dst++] = r; rgba[dst++] = g; rgba[dst++] = b; rgba[dst++] = 255;
-            }
-          }
-        }
-      } else {
-        for (var y=0; y<f.h; y++) {
-          var dst = ((y+f.y)*width + f.x) * 4;
-          for (var x=0; x<f.w; x++) {
-            var idx = indexStream[pi++];
-            if (f.transparent && idx===f.transIndex) { dst += 4; continue; }
-            var p3 = idx*3; var r = pal[p3]|0, g=pal[p3+1]|0, b=pal[p3+2]|0;
-            rgba[dst++] = r; rgba[dst++] = g; rgba[dst++] = b; rgba[dst++] = 255;
-          }
-        }
-      }
-      // This method now draws onto existing RGBA without clearing, honoring transparent index and interlace.
-    };
-    window.GifReader = GifReader;
-  })();
+  // omggif.js (embedded)
+  (function(){function a(c){var d=0;if(71!==c[0]||73!==c[1]||70!==c[2]||56!==c[3]||97!==c[5])throw Error("Invalid GIF 87a/89a header.");var e=c[6]|c[7]<<8,g=c[8]|c[9]<<8,h=c[10],f=128&h,i=2<<(7&h);c[11];c[12];var b=null;d=13;f&&(b=c.slice(d,d+3*i),d+=3*i);for(var j=[],k={};;){var l=c[d++];if(59===l)break;if(33===l){var m=c[d++];if(249===m){c[d++];var n=c[d++],o=c[d++]|c[d++]<<8,p=c[d++];c[d++];k={disposal:n>>2&7,userInput:!!(2&n),transparent:!!(1&n),transIndex:p,delay:o}}else for(m=c[d++];c[d];)d+=c[d],d++;d++}else if(44===l){var q=c[d++]|c[d++]<<8,r=c[d++]|c[d++]<<8,s=c[d++]|c[d++]<<8,t=c[d++]|c[d++]<<8,u=c[d++],v=128&u;128&u;64&u;var w=2<<(7&u),x=null;v&&(x=c.slice(d,d+3*w),d+=3*w);for(var y=c[d++],z=[];;){var A=c[d++];if(0===A)break;Array.prototype.push.apply(z,c.slice(d,d+A));d+=A}j.push({x:q,y:r,w:s,h:t,interlace:!!(64&u),lct:x,gct:b,delay:k.delay||0,disposal:k.disposal||0,transparent:k.transparent||!1,transIndex:k.transparent?k.transIndex|0:-1,lzwMin:y|0,codes:new Uint8Array(z)});k={}}else throw Error("Unknown block: 0x"+l.toString(16))}this.width=e;this.height=g;this.frames=j}function b(a,c,d){for(var e=1<<a,f=e+1,g=a+1,h=[],i=0,j=0,k=function(){for(var b=0,c=0;c<g;){if(i>=d.length)return f;var k=d[i],l=8-j,m=Math.min(g-c,l);b|=(k>>j& (1<<m)-1)<<c;j+=m;j>=8&&(j=0,i++);c+=m}return b},l,m=null,n=0;e>n;n++)h[n]=[n];for(h[e]=[],h[f]=null;l=k(),l!==f;){if(l===e){h=[];for(n=0;e>n;n++)h[n]=[n];h[e]=[],h[f]=null,g=a+1,m=null;continue}var o;if(h[l])o=h[l].slice(0);else{if(l!==h.length||!m)break;o=m.concat(m[0])}for(n=0;n<o.length;n++)c[n+outPos]=o[n];var outPos=outPos+o.length;m&&h.push(m.concat(o[0])),m=o,h.length===(1<<g)&&12>g&&g++}return c.subarray(0,outPos)}a.prototype.numFrames=function(){return this.frames.length},a.prototype.frameInfo=function(a){var b=this.frames[a];return{x:b.x,y:b.y,width:b.w,height:b.h,delay:b.delay,disposal:b.disposal,transparent:b.transparent}},a.prototype.decodeAndBlitFrameRGBA=function(a,c){var d=this.frames[a],e=this.width|0;this.height|0;var f=d.lct||d.gct||null;if(!f)throw Error("Missing color table");for(var g=b(d.lzwMin|0,d.codes,new Uint8Array(d.w*d.h)),h=0,i=0;i<d.h;i++)for(var j=(i+d.y)*e*4+(d.x<<2),k=0;k<d.w;k++){var l=g[h++];if(!d.transparent||l!==d.transIndex){var m=3*l,n=f[m]|0,o=f[m+1]|0,p=f[m+2]|0;c[j++]=n,c[j++]=o,c[j++]=p,c[j++]=255}}};window.GifReader=a})();
   </script>
 
   <!-- ===== 依存ライブラリ（インライン）: UPNG.js（PNG最適化・エンコード/デコード） ===== -->
@@ -647,10 +497,8 @@
 
     function showScreen(screenName) {
         state.currentScreen = screenName;
-        // まず全画面を非アクティブに
         Object.values(screens).forEach(screen => screen.classList.remove('active'));
         
-        // ターゲットに応じてtransformを設定
         if (screenName === 'editor') {
             screens.editor.style.transform = 'translateX(0)';
             screens.leftPanel.style.transform = 'translateX(-100%)';
@@ -665,19 +513,15 @@
             screens.settings.style.transform = 'translateX(0)';
         }
 
-        // ターゲット画面をアクティブにする
-        screens[screenName.replace('-','')]?.classList.add('active'); // 'left-panel' -> 'leftPanel'
+        screens[screenName.replace('-','')]?.classList.add('active');
     }
 
-    // ヘッダーボタンのイベントリスナー
     document.getElementById('goto-left-panel-btn').addEventListener('click', () => showScreen('left-panel'));
     document.getElementById('goto-settings-btn').addEventListener('click', () => showScreen('settings'));
     document.getElementById('back-to-editor-from-left').addEventListener('click', () => showScreen('editor'));
     document.getElementById('back-to-editor-from-settings').addEventListener('click', () => showScreen('editor'));
-    // --- 画面遷移ここまで ---
     
     const $ = (sel, parent=document) => parent.querySelector(sel);
-    const $$ = (sel, parent=document) => Array.from(parent.querySelectorAll(sel));
     
     const editorScreen = $('#editor-screen');
     const settingsScreen = $('#settings-screen');
@@ -685,33 +529,29 @@
     const stage = $('#stage');
     const ctx = stage.getContext('2d');
 
-    // WorkerスクリプトURL生成
     const workerBlob = new Blob([document.getElementById('gifjs-worker').textContent], { type:'application/javascript' });
     const workerURL = URL.createObjectURL(workerBlob);
 
-    // ライブラリ本体を有効化（グローバルGIFクラス定義）
     (function(){
       const src = document.getElementById('gifjs-lib').textContent;
       const f = new Function(src + '\n//# sourceURL=gifjs-lib-inline.js');
       f();
     })();
 
-    // レイヤーモデル
-    let layers = []; // {id, type:'png'|'gif', name, visible, opacity, x, y, w, h, png?:{img}, gif?:{frames:[{canvas,delay}], cumul:[...], duration}, motion?:{type, amp, speed, rot}}
+    let layers = [];
     let selectedId = null;
 
     const ui = {
-      // **セレクタの親要素を限定**
-      fileInput:  $('#fileInput', settingsScreen),
-      clearAll:   $('#clearAll', settingsScreen),
+      fileInput:  $('#fileInput', editorScreen),
+      clearAll:   $('#clearAll', editorScreen),
       canvasW:    $('#canvasW', settingsScreen),
       canvasH:    $('#canvasH', settingsScreen),
       applyCanvas:$('#applyCanvas', settingsScreen),
-      fitToContent: $('#fitToContent', editorScreen), // フッターに移動
+      fitToContent: $('#fitToContent', editorScreen),
       liveFit:    $('#liveFit', settingsScreen),
       layers:     $('#layers', settingsScreen),
-      savePNG:    $('#savePNG', editorScreen), // フッターに移動
-      saveGIF:    $('#saveGIF', editorScreen), // フッターに移動
+      savePNG:    $('#savePNG', editorScreen),
+      saveGIF:    $('#saveGIF', editorScreen),
       gifQuality: $('#gifQuality', settingsScreen),
       alphaThreshold: $('#alphaThreshold', settingsScreen),
       transparentColor: $('#transparentColor', settingsScreen),
@@ -743,10 +583,8 @@
       updateAppBtn: $('#update-app-btn', settingsScreen),
     };
 
-    // ★追加: 更新ボタンのイベントリスナー
     ui.updateAppBtn.addEventListener('click', () => {
         if (confirm("アプリのキャッシュをクリアして最新版を再取得しますか？\n(ページがリロードされます)")) {
-            // キャッシュをクリアしてリロード
             window.location.reload(true);
         }
     });
@@ -776,7 +614,7 @@
 
     function refreshLayerList(){
       ui.layers.innerHTML = '';
-      for (let i = layers.length - 1; i >= 0; i--) { // 上にあるほど前面 → リスト上は上から前面に見せる
+      for (let i = layers.length - 1; i >= 0; i--) {
         const l = layers[i];
         const item = document.createElement('div');
         item.className = 'layer-item';
@@ -920,7 +758,7 @@
       document.getElementById('optimizePNG').onclick = async () => {
         try {
           if (!window.UPNG || !UPNG.encode) {
-            alert('UPNG.jsが読み込まれていません。ページ内スクリプト upng-lib を有効化してください。');
+            alert('UPNG.jsが読み込まれていません。');
             return;
           }
           const mode = ui.pngOptMode.value;
@@ -970,49 +808,29 @@
 
           const wantHigh = ui.pngOptHigh && ui.pngOptHigh.checked;
           if (wantHigh && window.pako && pako.deflate) {
-            const savedDeflate = pako.deflate;
-            const savedDeflateRaw = pako.deflateRaw;
+            const savedDeflate = pako.deflate; const savedDeflateRaw = pako.deflateRaw;
             try {
-              pako.deflate = (input, options) => savedDeflate.call(pako, input, Object.assign({}, options, { level: 9 }));
-              if (typeof savedDeflateRaw === 'function') {
-                pako.deflateRaw = (input, options) => savedDeflateRaw.call(pako, input, Object.assign({}, options, { level: 9 }));
-              }
+              pako.deflate = (i, o) => savedDeflate.call(pako, i, { ...o, level: 9 });
+              if (typeof savedDeflateRaw === 'function') pako.deflateRaw = (i, o) => savedDeflateRaw.call(pako, i, { ...o, level: 9 });
               const abufHigh = UPNG.encode([rgbaU8.buffer], W, H, cnum, null, opts);
               if (abufHigh && abufHigh.byteLength < bestBuf.byteLength) { bestBuf = abufHigh; usedHigh = true; }
-            } catch (e) { console.warn('高圧縮エンコードに失敗しました:', e); }
-            finally {
-              pako.deflate = savedDeflate;
-              if (typeof savedDeflateRaw === 'function') pako.deflateRaw = savedDeflateRaw;
-            }
+            } catch (e) { console.warn('高圧縮エンコードに失敗:', e); }
+            finally { pako.deflate = savedDeflate; if (typeof savedDeflateRaw === 'function') pako.deflateRaw = savedDeflateRaw; }
           }
 
           const wantUltra = ui.pngOptUltra && ui.pngOptUltra.checked;
           if (wantUltra && window.pako && pako.deflate) {
-            const savedDeflate = pako.deflate;
-            const savedDeflateRaw = pako.deflateRaw;
-            const presets = [
-              { level: 9, strategy: 3, memLevel: 9, windowBits: 15 }, { level: 9, strategy: 1, memLevel: 9, windowBits: 15 },
-              { level: 9, strategy: 0, memLevel: 9, windowBits: 15 }, { level: 9, strategy: 2, memLevel: 9, windowBits: 15 },
-              { level: 9, strategy: 3, memLevel: 8, windowBits: 15 }, { level: 9, strategy: 1, memLevel: 8, windowBits: 15 },
-              { level: 9, strategy: 0, memLevel: 8, windowBits: 15 }, { level: 9, strategy: 3, memLevel: 9, windowBits: 14 },
-              { level: 9, strategy: 1, memLevel: 9, windowBits: 14 }
-            ];
+            const savedDeflate = pako.deflate; const savedDeflateRaw = pako.deflateRaw;
+            const presets = [ { level: 9, strategy: 3 }, { level: 9, strategy: 1 }, { level: 9, strategy: 0 }, { level: 9, strategy: 2 }];
             try {
               for (const pr of presets) {
-                pako.deflate = (input, options) => savedDeflate.call(pako, input, Object.assign({}, options, pr));
-                if (typeof savedDeflateRaw === 'function') {
-                  pako.deflateRaw = (input, options) => savedDeflateRaw.call(pako, input, Object.assign({}, options, pr));
-                }
+                pako.deflate = (i, o) => savedDeflate.call(pako, i, { ...o, ...pr });
+                if (typeof savedDeflateRaw === 'function') pako.deflateRaw = (i, o) => savedDeflateRaw.call(pako, i, { ...o, ...pr });
                 const abufTry = UPNG.encode([rgbaU8.buffer], W, H, cnum, null, opts);
-                if (abufTry && abufTry.byteLength < bestBuf.byteLength) {
-                  bestBuf = abufTry; usedUltra = true;
-                }
+                if (abufTry && abufTry.byteLength < bestBuf.byteLength) { bestBuf = abufTry; usedUltra = true; }
               }
-            } catch (e) { console.warn('超高圧縮エンコードに失敗しました:', e); }
-            finally {
-              pako.deflate = savedDeflate;
-              if (typeof savedDeflateRaw === 'function') pako.deflateRaw = savedDeflateRaw;
-            }
+            } catch (e) { console.warn('超高圧縮エンコードに失敗:', e); }
+            finally { pako.deflate = savedDeflate; if (typeof savedDeflateRaw === 'function') pako.deflateRaw = savedDeflateRaw; }
           }
 
           const blob = new Blob([bestBuf], {type:'image/png'});
@@ -1042,7 +860,6 @@
     }
     function formatBytes(n){ if (n==null) return '-'; const u=['B','KB','MB']; let i=0; let v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i?v.toFixed(1):v)+u[i]; }
 
-    // 選択PNGそのまま保存
     document.getElementById('saveOriginalPNG').onclick = () => {
       const l = layers.find(x=>x.id===selectedId);
       if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
@@ -1055,7 +872,6 @@
       });
     };
 
-    // 保存（GIF）
     ui.saveGIF.onclick = async () => {
       const quality = Math.max(1, Math.min(30, parseInt(ui.gifQuality.value)||1));
       const alphaTh = Math.max(0, Math.min(255, parseInt(ui.alphaThreshold.value)||0));
@@ -1492,7 +1308,8 @@
 
       c.restore();
     }
-
+    
+    // ★変更点: タッチ・マウス操作の共通化
     let action = null;
     let dragOffX=0, dragOffY=0;
     let resizeEdge = null;
@@ -1503,57 +1320,59 @@
     function dist(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return Math.hypot(dx,dy); }
     function angle(ax,ay,bx,by){ return Math.atan2(by-ay, bx-ax); }
 
-    stage.addEventListener('mousedown', (e) => {
+    function handleDragStart(e) {
+      e.preventDefault();
       const rect = stage.getBoundingClientRect();
-      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
-      const l = layers.find(x => x.id===selectedId);
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const mx = clientX - rect.left;
+      const my = clientY - rect.top;
+      
+      const l = layers.find(x => x.id === selectedId);
       if (!l || !l.visible) return;
 
-      const kCorner = 12;
-      const bsz = 16;
-      const cxh = l.x + l.w/2, cyh = l.y + l.h/2;
-      const rad = (Number(l.rot)||0) * Math.PI/180;
-      function rotp(dx,dy){ return { x: cxh + (dx*Math.cos(rad) - dy*Math.sin(rad)), y: cyh + (dx*Math.sin(rad) + dy*Math.cos(rad)) }; }
-      
-      const pFlip = rotp(-l.w/2 + 10, -l.h/2 + 10);
-      if (Math.abs(mx - pFlip.x) <= bsz && Math.abs(my - pFlip.y) <= bsz){ l.flipX = !l.flipX; e.preventDefault(); return; }
-      
-      const pReset = rotp( l.w/2 - 10, -l.h/2 + 10);
-      if (Math.abs(mx - pReset.x) <= bsz && Math.abs(my - pReset.y) <= bsz){
-        const baseW = l.origW || l.w; const baseH = l.origH || l.h;
-        const r = baseW / baseH;
+      const kCorner = 12, bsz = 16;
+      const cxh = l.x + l.w / 2, cyh = l.y + l.h / 2;
+      const rad = (Number(l.rot) || 0) * Math.PI / 180;
+      const rotp = (dx, dy) => ({ x: cxh + (dx * Math.cos(rad) - dy * Math.sin(rad)), y: cyh + (dx * Math.sin(rad) + dy * Math.cos(rad)) });
+
+      const pFlip = rotp(-l.w / 2 + 10, -l.h / 2 + 10);
+      if (dist(mx, my, pFlip.x, pFlip.y) <= bsz) { l.flipX = !l.flipX; return; }
+
+      const pReset = rotp(l.w / 2 - 10, -l.h / 2 + 10);
+      if (dist(mx, my, pReset.x, pReset.y) <= bsz) {
+        const r = (l.origW || l.w) / (l.origH || l.h);
         const candA = { w: Math.max(1, Math.round(l.h * r)), h: l.h };
         const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r)) };
-        const costA = Math.abs(candA.w - l.w);
-        const costB = Math.abs(candB.h - l.h);
-        const best = (costA <= costB) ? candA : candB;
+        const best = (Math.abs(candA.w - l.w) <= Math.abs(candB.h - l.h)) ? candA : candB;
         l.w = best.w; l.h = best.h;
-        l.x = Math.round(cxh - l.w/2);
-        l.y = Math.round(cyh - l.h/2);
-        e.preventDefault(); return;
-      }
-
-      const topMid = rotp(0, -l.h/2), bottomMid = rotp(0,  l.h/2), leftMid = rotp(-l.w/2, 0), rightMid = rotp( l.w/2, 0);
-      if (Math.abs(mx - topMid.x) <= bsz && Math.abs(my - topMid.y) <= bsz){ action='resize-edge'; resizeEdge='top'; }
-      else if (Math.abs(mx - bottomMid.x) <= bsz && Math.abs(my - bottomMid.y) <= bsz){ action='resize-edge'; resizeEdge='bottom'; }
-      else if (Math.abs(mx - leftMid.x) <= bsz && Math.abs(my - leftMid.y) <= bsz){ action='resize-edge'; resizeEdge='left'; }
-      else if (Math.abs(mx - rightMid.x) <= bsz && Math.abs(my - rightMid.y) <= bsz){ action='resize-edge'; resizeEdge='right'; }
-
-      if (action === 'resize-edge') {
-        startRect={ x:l.x, y:l.y, w:l.w, h:l.h }; stage.classList.add('dragging'); e.preventDefault(); return;
+        l.x = Math.round(cxh - l.w / 2); l.y = Math.round(cyh - l.h / 2);
+        return;
       }
       
-      const corners = [ {name:'bl', ...rotp(-l.w/2, l.h/2)}, {name:'br', ...rotp( l.w/2, l.h/2)} ];
-      for (const c of corners){
-        if (Math.abs(mx - c.x) <= kCorner && Math.abs(my - c.y) <= kCorner){
-          if (c.name==='br') {
+      const edges = { top: rotp(0, -l.h / 2), bottom: rotp(0, l.h / 2), left: rotp(-l.w / 2, 0), right: rotp(l.w / 2, 0) };
+      for (const [key, pos] of Object.entries(edges)) {
+        if (dist(mx, my, pos.x, pos.y) <= bsz) { action = 'resize-edge'; resizeEdge = key; break; }
+      }
+
+      if (action === 'resize-edge') {
+        startRect = { x: l.x, y: l.y, w: l.w, h: l.h };
+        stage.classList.add('dragging');
+        return;
+      }
+
+      const corners = { bl: rotp(-l.w / 2, l.h / 2), br: rotp(l.w / 2, l.h / 2) };
+      for (const [key, pos] of Object.entries(corners)) {
+        if (dist(mx, my, pos.x, pos.y) <= kCorner) {
+          if (key === 'br') {
             action = 'scale';
-            scaleState = { cx:cxh, cy:cyh, startW: l.w, startH: l.h, startDist: Math.max(1, dist(cxh,cyh,mx,my)) };
-          } else if (c.name==='bl') {
+            scaleState = { cx: cxh, cy: cyh, startW: l.w, startH: l.h, startDist: Math.max(1, dist(cxh, cyh, mx, my)) };
+          } else if (key === 'bl') {
             action = 'rotate';
-            rotateState = { cx:cxh, cy:cyh, startAngle: angle(cxh,cyh,mx,my), startRot: Number(l.rot)||0 };
+            rotateState = { cx: cxh, cy: cyh, startAngle: angle(cxh, cyh, mx, my), startRot: Number(l.rot) || 0 };
           }
-          stage.classList.add('dragging'); e.preventDefault(); return;
+          stage.classList.add('dragging');
+          return;
         }
       }
 
@@ -1562,83 +1381,74 @@
       const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
 
       if (Math.abs(lx) < l.w / 2 && Math.abs(ly) < l.h / 2) {
-        action = 'move'; stage.classList.add('dragging');
-        dragOffX = mx - l.x; dragOffY = my - l.y;
+        action = 'move';
+        stage.classList.add('dragging');
+        dragOffX = mx - l.x;
+        dragOffY = my - l.y;
+      }
+    }
+
+    function handleDragMove(e) {
+        if (!action) return;
         e.preventDefault();
-      }
-    });
 
-    window.addEventListener('mousemove', (e) => {
-      const rect = stage.getBoundingClientRect();
-      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
-      if (!action) { stage.style.cursor = 'grab'; return; }
+        const rect = stage.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const mx = clientX - rect.left;
+        const my = clientY - rect.top;
 
-      const l = layers.find(x => x.id===selectedId);
-      if (!l) return;
+        const l = layers.find(x => x.id === selectedId);
+        if (!l) return;
 
-      if (action==='move'){
-        let nx = Math.round(mx - dragOffX); let ny = Math.round(my - dragOffY);
-        const s = snapRect(nx, ny, l.w, l.h, l);
-        l.x = s.x; l.y = s.y;
-      }
-      else if (action==='resize-edge'){
-        const ox=startRect.x, oy=startRect.y, ow=startRect.w, oh=startRect.h;
-        const rad = (Number(l.rot)||0) * Math.PI/180;
-        
-        const mxg=mx-(ox+ow/2), myg=my-(oy+oh/2);
-        const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
-        const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
-
-        let newW = ow, newH = oh, dx = 0, dy = 0;
-
-        if (resizeEdge === 'left') {
-            const newLeftEdge = Math.min(lx, ow/2-1);
-            newW = ow/2 - newLeftEdge;
-            dx = (newLeftEdge + ow/2) / 2;
-        } else if (resizeEdge === 'right') {
-            const newRightEdge = Math.max(lx, -ow/2+1);
-            newW = newRightEdge + ow/2;
-            dx = (newRightEdge - ow/2) / 2;
-        } else if (resizeEdge === 'top') {
-            const newTopEdge = Math.min(ly, oh/2-1);
-            newH = oh/2 - newTopEdge;
-            dy = (newTopEdge + oh/2) / 2;
-        } else if (resizeEdge === 'bottom') {
-            const newBottomEdge = Math.max(ly, -oh/2+1);
-            newH = newBottomEdge + oh/2;
-            dy = (newBottomEdge - oh/2) / 2;
+        if (action === 'move') {
+            const s = snapRect(mx - dragOffX, my - dragOffY, l.w, l.h, l);
+            l.x = s.x; l.y = s.y;
+        } else if (action === 'resize-edge') {
+            const { x: ox, y: oy, w: ow, h: oh } = startRect;
+            const rad = (Number(l.rot) || 0) * Math.PI / 180;
+            const mxg = mx - (ox + ow / 2), myg = my - (oy + oh / 2);
+            const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
+            const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
+            let newW = ow, newH = oh, dx = 0, dy = 0;
+            if (resizeEdge === 'left') { const newLeft = Math.min(lx, ow / 2 - 1); newW = ow / 2 - newLeft; dx = (newLeft + ow / 2) / 2; }
+            else if (resizeEdge === 'right') { const newRight = Math.max(lx, -ow / 2 + 1); newW = newRight + ow / 2; dx = (newRight - ow / 2) / 2; }
+            else if (resizeEdge === 'top') { const newTop = Math.min(ly, oh / 2 - 1); newH = oh / 2 - newTop; dy = (newTop + oh / 2) / 2; }
+            else if (resizeEdge === 'bottom') { const newBottom = Math.max(ly, -oh / 2 + 1); newH = newBottom + oh / 2; dy = (newBottom - oh / 2) / 2; }
+            const worldDX = dx * Math.cos(rad) - dy * Math.sin(rad);
+            const worldDY = dx * Math.sin(rad) + dy * Math.cos(rad);
+            l.x = Math.round(ox + ow / 2 - newW / 2 + worldDX);
+            l.y = Math.round(oy + oh / 2 - newH / 2 + worldDY);
+            l.w = Math.max(1, Math.round(newW));
+            l.h = Math.max(1, Math.round(newH));
+        } else if (action === 'scale') {
+            const { cx, cy, startW, startH, startDist } = scaleState;
+            const sc = Math.max(0.01, dist(cx, cy, mx, my) / startDist);
+            l.w = Math.max(1, Math.round(startW * sc));
+            l.h = Math.max(1, Math.round(startH * sc));
+            l.x = Math.round(cx - l.w / 2);
+            l.y = Math.round(cy - l.h / 2);
+        } else if (action === 'rotate') {
+            const { cx, cy, startAngle, startRot } = rotateState;
+            let deltaDeg = (angle(cx, cy, mx, my) - startAngle) * 180 / Math.PI;
+            if (e.shiftKey) { deltaDeg = Math.round(deltaDeg / 15) * 15; }
+            l.rot = (startRot + deltaDeg);
         }
+    }
 
-        const worldDX = dx * Math.cos(rad) - dy * Math.sin(rad);
-        const worldDY = dx * Math.sin(rad) + dy * Math.cos(rad);
+    function handleDragEnd() {
+        action = null; resizeEdge = null; startRect = null; scaleState = null; rotateState = null;
+        stage.classList.remove('dragging');
+    }
 
-        l.x = Math.round(ox + ow/2 - newW/2 + worldDX);
-        l.y = Math.round(oy + oh/2 - newH/2 + worldDY);
-        l.w = Math.max(1, Math.round(newW));
-        l.h = Math.max(1, Math.round(newH));
-      }
-      else if (action==='scale'){
-        const { cx, cy, startW, startH, startDist } = scaleState;
-        const curDist = Math.max(1, dist(cx,cy,mx,my));
-        const sc = Math.max(0.01, curDist / startDist);
-        let nw = Math.max(1, Math.round(startW * sc));
-        let nh = Math.max(1, Math.round(startH * sc));
-        l.w = nw; l.h = nh; l.x = Math.round(cx - nw/2); l.y = Math.round(cy - nh/2);
-      }
-      else if (action==='rotate'){
-        const { cx, cy, startAngle, startRot } = rotateState;
-        const ang = angle(cx,cy,mx,my);
-        let deltaDeg = (ang - startAngle) * 180 / Math.PI;
-        if (e.shiftKey) { deltaDeg = Math.round(deltaDeg/15)*15; }
-        l.rot = (startRot + deltaDeg);
-      }
-    });
+    stage.addEventListener('mousedown', handleDragStart);
+    window.addEventListener('mousemove', handleDragMove);
+    window.addEventListener('mouseup', handleDragEnd);
+    stage.addEventListener('touchstart', handleDragStart, { passive: false });
+    window.addEventListener('touchmove', handleDragMove, { passive: false });
+    window.addEventListener('touchend', handleDragEnd);
+    window.addEventListener('touchcancel', handleDragEnd);
 
-    window.addEventListener('mouseup', ()=>{
-      action=null; resizeEdge=null; startRect=null; scaleState=null; rotateState=null; stage.classList.remove('dragging');
-    });
-
-    // キー移動
     window.addEventListener('keydown', (e) => {
       const l = layers.find(x => x.id===selectedId); if (!l) return;
       let d = 1;
