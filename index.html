@@ -32,12 +32,12 @@
     /* --- PWAアプリから持ってきた基本レイアウト --- */
     html, body {
         height: 100%;
+        margin: 0; /* ★追加: ブラウザのデフォルトマージンをリセット */
         font-family: var(--font-family);
         background-color: var(--bg-secondary);
         color: var(--text);
         overscroll-behavior-y: contain;
         overflow: hidden; /* bodyでのスクロールを禁止 */
-        touch-action: manipulation; /* ★追加: ダブルタップによるズームを防止 */
     }
     .app-container {
         display: flex;
