@@ -90,7 +90,6 @@
         line-height: 1;
         cursor: pointer;
         min-width: 30px;
-        -webkit-text-size-adjust: 100%; /* ★追加: iOSでの自動ズーム防止 */
     }
     #settings-screen .app-header {
         justify-content: space-between;
@@ -131,7 +130,7 @@
         display: flex;
         justify-content: center;
         gap: 10px;
-        padding: 8px 12px; /* ★変更: 上下のパディングを縮小 */
+        padding: 10px 15px;
         background-color: var(--bg-header);
         flex-shrink: 0;
         z-index: 10;
@@ -143,23 +142,21 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px; /* ★変更: アイコンとの間隔を少し詰める */
+        gap: 8px;
         cursor: pointer;
-        padding: 6px 12px; /* ★変更: ボタンのパディングを縮小 */
+        padding: 4px 12px; /* ★変更点: 高さをスリムにする */
         border-radius: 5px;
         border: none;
-        font-size: 13px; /* ★変更: フォントサイズを少し小さく */
-        background-color: #444;
+        font-size: 14px;
+        background-color: #444; 
         color: var(--text-light);
         transition: background-color 0.2s ease, color 0.2s ease;
         line-height: 1.4;
-        -webkit-text-size-adjust: 100%; /* ★追加: iOSでの自動ズーム防止 */
     }
     .footer-btn:hover { background-color: #555; }
     .footer-btn .icon { font-size: 1.2em; }
     .footer-btn.action { background-color: #555; }
     .footer-btn.action:hover { background-color: #666; }
-
 
     /* --- ここからエディタ固有のスタイル (一部調整) --- */
     .section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
@@ -189,14 +186,13 @@
       image-rendering: pixelated;
       cursor: grab;
       max-width: 100%;
-      max-height: calc(100vh - 150px); /* ヘッダーとフッター分を考慮 */
+      max-height: calc(100vh - 150px);
       object-fit: contain;
     }
     .stage.dragging { cursor: grabbing; }
     .hint { padding: 0 16px 16px; color: var(--muted); font-size: 12px; text-align: center; }
     details summary { cursor: pointer; }
     .kbd { background:#222; border:1px solid var(--border); padding:1px 6px; border-radius:4px; font-size:12px; }
-    /* ★追加: 更新ボタン用 */
     .danger-zone {
         margin-top: 30px;
         padding-top: 20px;
@@ -213,10 +209,24 @@
         padding: 10px;
         border-radius: 5px;
         cursor: pointer;
-        -webkit-text-size-adjust: 100%; /* iOSズーム防止 */
+        font-size: 14px;
     }
     .danger-zone button:hover {
         background-color: var(--bg-button-update-hover);
+    }
+    /* ★追加: ズーム防止 */
+    input[type="number"], input[type="text"], input[type="color"], select {
+      font-size: 16px; /* iPhoneでの自動ズーム防止 */
+    }
+    .small input[type="number"], .small select {
+      font-size: 16px;
+      transform: scale(0.8);
+      transform-origin: left;
+      padding: 8px 10px;
+      width: 100px !important;
+    }
+    .row.small {
+      align-items: center;
     }
   </style>
 </head>
@@ -272,7 +282,6 @@
                  <h1>設定とツール</h1>
             </header>
             <main class="main-content">
-                <!-- ここに元のサイドバーの中身を移動 -->
                 <div class="section">
                     <h2>ファイル読み込み</h2>
                     <div class="row" style="gap:6px; align-items:stretch;">
@@ -296,8 +305,8 @@
                       <summary>配置補助</summary>
                       <div class="row" style="margin-top:6px">
                         <label class="row small"><input id="snapEnabled" type="checkbox" checked> スナップ</label>
-                        <label class="small">グリッド(px) <input id="snapGrid" type="number" min="1" step="1" value="8" style="width:80px"></label>
-                        <label class="small">許容(px) <input id="snapTol" type="number" min="1" step="1" value="6" style="width:80px"></label>
+                        <label class="small">グリッド(px) <input id="snapGrid" type="number" min="1" step="1" value="8"></label>
+                        <label class="small">許容(px) <input id="snapTol" type="number" min="1" step="1" value="6"></label>
                       </div>
                     </details>
                 </div>
@@ -321,9 +330,9 @@
                         </label>
                       </div>
                       <div class="row small">
-                        <label>振幅 <input id="motionAmp" type="number" step="1" value="10" style="width:80px"></label>
-                        <label>速度 <input id="motionSpeed" type="number" step="0.1" value="1.0" style="width:80px"></label>
-                        <label>回転 <input id="motionRot" type="number" step="1" value="0" style="width:80px"></label>
+                        <label>振幅 <input id="motionAmp" type="number" step="1" value="10"></label>
+                        <label>速度 <input id="motionSpeed" type="number" step="0.1" value="1.0"></label>
+                        <label>回転 <input id="motionRot" type="number" step="1" value="0"></label>
                       </div>
                       <div class="row small" style="margin-top:6px">
                         <button class="btn" id="applyMotion">このレイヤーに適用</button>
@@ -340,18 +349,18 @@
                     <details>
                       <summary>GIF出力オプション</summary>
                       <div class="row" style="margin-top:8px">
-                        <label class="small">品質 <input id="gifQuality" type="number" min="1" max="30" step="1" value="1" style="width:80px" title="1=最高品質（遅い）/ 30=最低品質（速い）"></label>
+                        <label class="small">品質 <input id="gifQuality" type="number" min="1" max="30" step="1" value="1" title="1=最高品質（遅い）/ 30=最低品質（速い）"></label>
                         <span class="small muted">ディザリングは強制OFF</span>
                       </div>
                       <div class="row" style="margin-top:8px">
-                        <label class="small">透明しきい <input id="alphaThreshold" type="number" min="0" max="255" step="1" value="0" style="width:80px" title="0=完全透明だけを透明化、>0=半透明も透明化（穴が出やすい）"></label>
+                        <label class="small">透明しきい <input id="alphaThreshold" type="number" min="0" max="255" step="1" value="0" title="0=完全透明だけを透明化、>0=半透明も透明化（穴が出やすい）"></label>
                         <label class="small">透明色 <input id="transparentColor" type="color" value="#ff00ff" title="透過に使う色（アート内に存在しない目立つ色を推奨：#FF00FF）"></label>
                         <label class="small">ループ <input id="loop" type="checkbox" checked></label>
                       </div>
                       <div class="muted small" style="margin-top:4px">注意: 透過優先のためGIF出力時のディザリングは自動で無効化されます（フリンジ抑制）。</div>
                       <div class="row" style="margin-top:8px">
-                        <label class="small">最大長(秒) <input id="maxDuration" type="number" min="1" max="60" step="1" value="10" style="width:80px"></label>
-                        <label class="small">出力FPS <input id="exportFPS" type="number" min="1" max="60" step="1" value="20" style="width:80px"></label>
+                        <label class="small">最大長(秒) <input id="maxDuration" type="number" min="1" max="60" step="1" value="10"></label>
+                        <label class="small">出力FPS <input id="exportFPS" type="number" min="1" max="60" step="1" value="20"></label>
                       </div>
                       <div class="row" style="margin-top:8px">
                         <label class="small">タイムライン
@@ -361,12 +370,12 @@
                             <option value="combined">併用</option>
                           </select>
                         </label>
-                        <label class="small">ループ回数 <input id="loopCount" type="number" min="1" step="1" value="1" style="width:80px"></label>
+                        <label class="small">ループ回数 <input id="loopCount" type="number" min="1" step="1" value="1"></label>
                       </div>
                       <div class="row" style="margin-top:8px">
-                        <label class="small">出力スケール(%) <input id="exportScale" type="number" min="10" max="200" step="10" value="100" style="width:80px"></label>
-                        <label class="small">フレーム結合 変化閾値(%) <input id="mergeThresh" type="number" min="0" max="100" step="0.5" value="1" style="width:80px"></label>
-                        <label class="small">色差しきい(0-255) <input id="mergeDelta" type="number" min="0" max="255" step="1" value="10" style="width:80px"></label>
+                        <label class="small">出力スケール(%) <input id="exportScale" type="number" min="10" max="200" step="10" value="100"></label>
+                        <label class="small">フレーム結合 変化閾値(%) <input id="mergeThresh" type="number" min="0" max="100" step="0.5" value="1"></label>
+                        <label class="small">色差しきい(0-255) <input id="mergeDelta" type="number" min="0" max="255" step="1" value="10"></label>
                       </div>
                       <div class="muted small" style="margin-top:4px">ヒント: サイズを小さくしたい場合は 出力スケール↓ / 出力FPS↓ / フレーム結合の閾値↑ を試してください。</div>
                     </details>
@@ -437,7 +446,6 @@
                   </details>
                 </div>
                 
-                <!-- ★追加: 更新ボタン -->
                 <div class="danger-zone">
                      <button id="update-app-btn">アプリを更新 (キャッシュクリア)</button>
                      <p class="muted small" style="text-align:center;">
@@ -446,7 +454,6 @@
                 </div>
             </main>
         </div>
-
     </div>
 
   <!-- ===== 依存ライブラリ（インライン）: omggif (デコード) ===== -->
@@ -750,6 +757,13 @@
       refreshLayerList();
       if (ui.liveFit.checked) fitCanvasToContent();
     }
+
+    function removeLayer(id){
+      layers = layers.filter(l => l.id !== id);
+      if (selectedId === id) selectedId = layers.length ? layers[layers.length-1].id : null;
+      refreshLayerList();
+      if (ui.liveFit.checked) fitCanvasToContent();
+    }
     function moveLayer(id, dir){
       const idx = layers.findIndex(l => l.id === id);
       if (idx < 0) return;
@@ -782,8 +796,8 @@
         controls.append(vis, up, down, del);
         head.append(title, controls);
         const pos = document.createElement('div'); pos.className='row small';
-        const posx = document.createElement('input'); posx.type='number'; posx.value=l.x; posx.style.width='80px';
-        const posy = document.createElement('input'); posy.type='number'; posy.value=l.y; posy.style.width='80px';
+        const posx = document.createElement('input'); posx.type='number'; posx.value=l.x;
+        const posy = document.createElement('input'); posy.type='number'; posy.value=l.y;
         posx.onchange=()=>{ l.x = parseInt(posx.value)||0; };
         posy.onchange=()=>{ l.y = parseInt(posy.value)||0; };
         pos.append('X', posx, 'Y', posy);
@@ -843,14 +857,12 @@
     }
 
     async function loadGifLayer(name, buf){
-      // Decode using GifReader with proper transparent index, interlace, and disposal handling
       const reader = new GifReader(new Uint8Array(buf));
       const W = reader.width|0, H = reader.height|0;
       const n = reader.numFrames();
       const frames = [];
       let duration = 0;
-      // Base buffer that persists across frames (composited result)
-      let base = new Uint8ClampedArray(W*H*4); // start fully transparent
+      let base = new Uint8ClampedArray(W*H*4);
       function clearRectRGBA(dst, x,y,w,h){
         for (let yy=0; yy<h; yy++){
           let off = ((y+yy)*W + x) * 4;
@@ -861,24 +873,20 @@
       }
       for (let i=0;i<n;i++) {
         const info = reader.frameInfo(i);
-        // backup for disposal=3
         const backup = (info.disposal===3) ? base.slice() : null;
-        // draw current frame onto a working copy
         const work = base.slice();
         reader.decodeAndBlitFrameRGBA(i, work);
-        // output image for this frame (before disposal applied)
         const outCanvas = document.createElement('canvas'); outCanvas.width=W; outCanvas.height=H;
         outCanvas.getContext('2d').putImageData(new ImageData(work, W, H), 0, 0);
-        const delayMs = Math.max(10, (info.delay||0) * 10); // 0は10msに丸める
+        const delayMs = Math.max(10, (info.delay||0) * 10);
         frames.push({ canvas: outCanvas, delay: delayMs });
         duration += delayMs;
-        // apply disposal to prepare base for the next frame
-        if (info.disposal === 2) { // restore to background: treat as transparent
+        if (info.disposal === 2) {
           clearRectRGBA(work, info.x|0, info.y|0, info.width|0, info.height|0);
           base = work;
-        } else if (info.disposal === 3 && backup) { // restore to previous
+        } else if (info.disposal === 3 && backup) {
           base = backup;
-        } else { // 0/1: none
+        } else {
           base = work;
         }
       }
@@ -915,30 +923,26 @@
             alert('UPNG.jsが読み込まれていません。ページ内スクリプト upng-lib を有効化してください。');
             return;
           }
-          const mode = ui.pngOptMode.value; // 'lossless' | 'quant'
+          const mode = ui.pngOptMode.value;
           const cnum = (mode==='quant') ? Math.max(2, Math.min(256, parseInt(ui.pngOptColors.value)||256)) : 0;
-          const alphaSteps = Math.max(1, parseInt(ui.pngOptAlpha.value)||256); // 256/64/16
-          const target = ui.pngOptTarget.value; // 'composite' | 'selected'
+          const alphaSteps = Math.max(1, parseInt(ui.pngOptAlpha.value)||256);
+          const target = ui.pngOptTarget.value;
           const wantDither = (ui.pngOptDither.value==='fs');
 
-          // 取得するRGBAとサイズ
           let W=0,H=0, rgbaU8=null, originalSize=null, suggestedName='optimized.png';
           if (target==='composite') {
-            // 透明背景で合成（チェック柄は描かない）
             const comp = document.createElement('canvas'); comp.width=stage.width; comp.height=stage.height; const cctx = comp.getContext('2d');
             cctx.clearRect(0,0,comp.width,comp.height);
             drawAtTimeIntoContext(cctx, performance.now()-startTime, true);
             W=comp.width; H=comp.height;
             const id = cctx.getImageData(0,0,W,H);
             rgbaU8 = new Uint8Array(id.data.buffer.slice(0));
-            // オリジナルサイズ（比較用）は toBlob で取得
             originalSize = await new Promise((res)=>comp.toBlob(b=>res(b?b.size:null),'image/png'));
             suggestedName = 'composited_optimized.png';
           } else {
             const l = layers.find(x=>x.id===selectedId);
             if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
             suggestedName = (l.name||'selected')+'_optimized.png';
-            // 元PNGをデコード
             const src = l.png.originalUrl || l.png.img.src;
             const ab = await fetch(src).then(r=>r.arrayBuffer());
             originalSize = ab.byteLength;
@@ -947,7 +951,6 @@
             if (dec && dec.width && raws && raws[0]) {
               const raw = raws[0]; W = dec.width; H = dec.height; rgbaU8 = new Uint8Array(raw.buffer.slice(0));
             } else {
-              // Fallback: use Image decode
               const blob = new Blob([ab], {type:'image/png'}); const url = URL.createObjectURL(blob);
               const img = new Image(); img.src=url; await img.decode();
               const cnv=document.createElement('canvas'); cnv.width=img.naturalWidth; cnv.height=img.naturalHeight; const c=cnv.getContext('2d');
@@ -956,21 +959,15 @@
             }
           }
 
-          // アルファ段階を適用（減色時に有効）。256=変更なし
           if (alphaSteps>0 && alphaSteps<256) reduceAlphaLevelsInPlace(rgbaU8, alphaSteps);
-
-          // UPNG.encode オプション
           const opts = {};
-          if (wantDither && mode==='quant') opts.dither = 1; // 対応ビルドではFSディザを有効化（未対応なら無視）
+          if (wantDither && mode==='quant') opts.dither = 1;
 
-          // まず既定圧縮でエンコード
           const abufDefault = UPNG.encode([rgbaU8.buffer], W, H, cnum, null, opts);
-
           let bestBuf = abufDefault;
           let usedHigh = false;
           let usedUltra = false;
 
-          // 「高圧縮(遅い)」が有効なら、pako.deflate の圧縮レベルを一時的に 9 にして再エンコード（ロスレス/減色どちらでも適用）→ 小さい方を採用
           const wantHigh = ui.pngOptHigh && ui.pngOptHigh.checked;
           if (wantHigh && window.pako && pako.deflate) {
             const savedDeflate = pako.deflate;
@@ -982,29 +979,22 @@
               }
               const abufHigh = UPNG.encode([rgbaU8.buffer], W, H, cnum, null, opts);
               if (abufHigh && abufHigh.byteLength < bestBuf.byteLength) { bestBuf = abufHigh; usedHigh = true; }
-            } catch (e) {
-              console.warn('高圧縮エンコードに失敗しました:', e);
-            } finally {
+            } catch (e) { console.warn('高圧縮エンコードに失敗しました:', e); }
+            finally {
               pako.deflate = savedDeflate;
               if (typeof savedDeflateRaw === 'function') pako.deflateRaw = savedDeflateRaw;
             }
           }
 
-          // 「高圧縮(超遅い)」が有効なら、多数のDeflateパラメータ組み合わせで再エンコードし、より小さいサイズを探索
           const wantUltra = ui.pngOptUltra && ui.pngOptUltra.checked;
           if (wantUltra && window.pako && pako.deflate) {
             const savedDeflate = pako.deflate;
             const savedDeflateRaw = pako.deflateRaw;
-            // Zlib strategies: 0=DEFAULT,1=FILTERED,2=HUFFMAN_ONLY,3=RLE,4=FIXED
             const presets = [
-              { level: 9, strategy: 3, memLevel: 9, windowBits: 15 },
-              { level: 9, strategy: 1, memLevel: 9, windowBits: 15 },
-              { level: 9, strategy: 0, memLevel: 9, windowBits: 15 },
-              { level: 9, strategy: 2, memLevel: 9, windowBits: 15 },
-              { level: 9, strategy: 3, memLevel: 8, windowBits: 15 },
-              { level: 9, strategy: 1, memLevel: 8, windowBits: 15 },
-              { level: 9, strategy: 0, memLevel: 8, windowBits: 15 },
-              { level: 9, strategy: 3, memLevel: 9, windowBits: 14 },
+              { level: 9, strategy: 3, memLevel: 9, windowBits: 15 }, { level: 9, strategy: 1, memLevel: 9, windowBits: 15 },
+              { level: 9, strategy: 0, memLevel: 9, windowBits: 15 }, { level: 9, strategy: 2, memLevel: 9, windowBits: 15 },
+              { level: 9, strategy: 3, memLevel: 8, windowBits: 15 }, { level: 9, strategy: 1, memLevel: 8, windowBits: 15 },
+              { level: 9, strategy: 0, memLevel: 8, windowBits: 15 }, { level: 9, strategy: 3, memLevel: 9, windowBits: 14 },
               { level: 9, strategy: 1, memLevel: 9, windowBits: 14 }
             ];
             try {
@@ -1018,9 +1008,8 @@
                   bestBuf = abufTry; usedUltra = true;
                 }
               }
-            } catch (e) {
-              console.warn('超高圧縮エンコードに失敗しました:', e);
-            } finally {
+            } catch (e) { console.warn('超高圧縮エンコードに失敗しました:', e); }
+            finally {
               pako.deflate = savedDeflate;
               if (typeof savedDeflateRaw === 'function') pako.deflateRaw = savedDeflateRaw;
             }
@@ -1028,7 +1017,7 @@
 
           const blob = new Blob([bestBuf], {type:'image/png'});
           const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = suggestedName; a.click(); URL.revokeObjectURL(a.href);
-          // 情報表示
+          
           const modeLabel = (mode==='quant' ? '/減色' : '/ロスレス');
           const extraNote = usedUltra ? ` （超高圧縮使用${modeLabel}）` : (usedHigh ? ` （高圧縮使用${modeLabel}）` : '');
           if (originalSize!=null) {
@@ -1045,7 +1034,6 @@
     }
 
     function reduceAlphaLevelsInPlace(u8, levels){
-      // levels: 256,64,16 → map alpha to nearest bucket
       if (levels<=1) { for (let i=3;i<u8.length;i+=4) u8[i]= (u8[i]>0?255:0); return; }
       const step = 255/(levels-1);
       for (let i=3;i<u8.length;i+=4){
@@ -1054,13 +1042,11 @@
     }
     function formatBytes(n){ if (n==null) return '-'; const u=['B','KB','MB']; let i=0; let v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i?v.toFixed(1):v)+u[i]; }
 
-    // 選択PNGそのまま保存（画質・圧縮ともにオリジナルを無変換で保存）
+    // 選択PNGそのまま保存
     document.getElementById('saveOriginalPNG').onclick = () => {
       const l = layers.find(x=>x.id===selectedId);
       if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
-      // 元のArrayBufferからBlobを作って保存するのが理想だが、現仕様ではimgのみ保持している。
-      // そこで: ImageBitmap/Canvasを介さないと“完全一致”は不可能なため、読み込み時にオリジナルBlob URLも保持するよう拡張する。
-      const src = l.png.originalUrl || l.png.img.src; // originalUrl優先
+      const src = l.png.originalUrl || l.png.img.src;
       fetch(src).then(r=>r.blob()).then((blob)=>{
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
         a.download = l.name || 'original.png'; a.click(); URL.revokeObjectURL(a.href);
@@ -1072,34 +1058,26 @@
     // 保存（GIF）
     ui.saveGIF.onclick = async () => {
       const quality = Math.max(1, Math.min(30, parseInt(ui.gifQuality.value)||1));
-      const ditherUI = false; // 強制OFF
       const alphaTh = Math.max(0, Math.min(255, parseInt(ui.alphaThreshold.value)||0));
       const colorHex = ui.transparentColor.value || '#ff00ff';
       const tr = hexToRgb(colorHex);
-      // GIFは1bit透明のため、半透明はマット色に合成して不透明化する
-      const matte = { r: 255, g: 255, b: 255 }; // 将来UI化可（白で合成）
-      const loop = ui.loop.checked ? 0 : -1; // 0=無限, -1=無拡張
-      const maxS = Math.max(1, Math.min(60, parseInt(ui.maxDuration.value)||10));
-      const maxMs = maxS * 1000;
+      const matte = { r: 255, g: 255, b: 255 };
+      const loop = ui.loop.checked ? 0 : -1;
       const fps = Math.max(1, Math.min(60, parseInt(ui.exportFPS.value)||20));
       const frameDur = Math.round(1000 / fps);
-      // 透過を確実に維持するため、ディザは強制OFF（誤差拡散が透明色を分散させるのを防止）
-      const dither = false; // 強制OFF
+      const dither = false;
 
       const timeline = buildTimelineWithMotion(computeMaxMsFromUI(frameDur), frameDur, ui.timelineMode ? ui.timelineMode.value : 'boundary');
       if (timeline.length <= 0) { alert('フレームがありません'); return; }
 
-      // 出力スケール
       const scalePct = Math.max(10, Math.min(200, parseInt(document.getElementById('exportScale').value)||100));
       const outW = Math.max(1, Math.round(stage.width * scalePct / 100));
       const outH = Math.max(1, Math.round(stage.height * scalePct / 100));
       const gif = new GIF({ workers: 2, quality, width: outW, height: outH, dither, repeat: loop, transparent: (tr.r<<16)|(tr.g<<8)|tr.b, workerScript: workerURL, globalPalette: true, background: 'transparent' });
 
-      // 合成用キャンバス（オリジナルサイズ）と、出力リスケール用キャンバス
       const comp = document.createElement('canvas'); comp.width = stage.width; comp.height = stage.height; const cctx = comp.getContext('2d');
       const outCanvas = document.createElement('canvas'); outCanvas.width = outW; outCanvas.height = outH; const octx = outCanvas.getContext('2d');
-
-      // フレームマージ設定
+      
       const mergeThresh = Math.max(0, Math.min(100, parseFloat(document.getElementById('mergeThresh').value)||0));
       const mergeDelta = Math.max(0, Math.min(255, parseInt(document.getElementById('mergeDelta').value)||10));
       let pendingImage = null;
@@ -1108,14 +1086,11 @@
       for (let i=0;i<timeline.length;i++) {
         const frameTime = timeline[i].t;
         const delay = timeline[i].d;
-        // draw original size
         cctx.clearRect(0,0,comp.width,comp.height);
-        drawAtTimeIntoContext(cctx, frameTime, true); // apply motion
-        // scale to output size (高品質補間)
+        drawAtTimeIntoContext(cctx, frameTime, true);
         octx.clearRect(0,0,outW,outH);
         octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
         octx.drawImage(comp, 0, 0, outW, outH);
-        // merge check
         const imgData = octx.getImageData(0,0,outW,outH);
         applyTransparentColor(imgData.data, alphaTh, tr, matte);
         if (!pendingImage) { pendingImage = imgData; pendingDelay = delay; continue; }
@@ -1127,7 +1102,7 @@
       if (pendingImage) { gif.addFrame(pendingImage, { delay: Math.max(10, pendingDelay|0), copy: true }); }
 
       function percentChanged(a, b, delta){
-        let diff=0; const n=a.length; // RGBA
+        let diff=0; const n=a.length;
         for (let i=0;i<n;i+=4){
           const da = Math.abs(a[i]-b[i]) + Math.abs(a[i+1]-b[i+1]) + Math.abs(a[i+2]-b[i+2]) + Math.abs(a[i+3]-b[i+3]);
           if (da > delta) diff++;
@@ -1156,16 +1131,13 @@
       const mr = matte?.r ?? 255, mg = matte?.g ?? 255, mb = matte?.b ?? 255;
       for (let i=0;i<data.length;i+=4){
         const a = data[i+3];
-        // 透明しきい値以下は完全透明（RGBは透明色に揃える）
         if (a <= alphaTh){ data[i]=r; data[i+1]=g; data[i+2]=b; data[i+3]=0; continue; }
         if (a<255){
-          // 半透明はマット色に合成して不透明化（GIFは部分透明不可のため）
           const af = a/255;
           data[i]   = Math.round(data[i]*af + mr*(1-af));
           data[i+1] = Math.round(data[i+1]*af + mg*(1-af));
           data[i+2] = Math.round(data[i+2]*af + mb*(1-af));
         }
-        // 完全不透明に丸め、透明色と同一RGBは1だけずらす（フリンジ対策）
         if (data[i]===r && data[i+1]===g && data[i+2]===b) {
           data[i] = (r+1)&255;
         }
@@ -1173,9 +1145,7 @@
       }
     }
 
-    // タイムライン生成：全GIFレイヤーのフレーム境界の集合を0..maxMsまで
     function buildTimelineWithMotion(maxMs, frameDur, mode='boundary'){
-      // mode: 'boundary' | 'fixed' | 'combined'
       const times = new Set();
       if (mode === 'fixed' || mode === 'combined') {
         for (let t=0; t<=maxMs; t+=frameDur) times.add(t);
@@ -1205,15 +1175,12 @@
       return result;
     }
 
-    // 指定時間tでの各レイヤーを描画（プレビューにもエンコードにも使用）
     function drawAtTimeIntoContext(targetCtx, t, applyMotion=false){
-      // checker 背景は省略（保存には不要）。ここでは透明背景。
       for (const l of layers) {
         if (!l.visible) continue;
         targetCtx.save();
         targetCtx.globalAlpha = l.opacity;
         if (l.type === 'png') {
-          const tx = l.x|0, ty = l.y|0;
           const m = (applyMotion && l.motion) ? l.motion : null;
           if (!m || m.type==='none') {
             const cx = l.x + l.w/2, cy = l.y + l.h/2;
@@ -1241,34 +1208,19 @@
 
     function applyMotionDraw(ctx, l, t){
       const m = l.motion || { type:'none' };
-      const amp = Number(m.amp)||0; // px or ratio*100
-      const spd = Math.max(0.0001, Number(m.speed)||1.0); // Hz相当
-      const rot = Number(m.rot)||0; // deg base
+      const amp = Number(m.amp)||0;
+      const spd = Math.max(0.0001, Number(m.speed)||1.0);
       const baseDeg = (Number(l.rot)||0) + (Number(m.rot)||0);
       const rad = (baseDeg*Math.PI/180);
-      const tt = t/1000 * spd * 2*Math.PI; // rad
+      const tt = t/1000 * spd * 2*Math.PI;
       const img = l.png.img; const cx = l.x + l.w/2, cy = l.y + l.h/2;
       ctx.translate(cx, cy);
       let sx=1, sy=1, dx=0, dy=0, drot=0;
       switch (m.type) {
-        case 'squash': // もちもち: 横伸び⇄縦縮み
-          sx = 1 + (Math.sin(tt)*amp)/100;
-          sy = 1 - (Math.sin(tt)*amp)/100;
-          break;
-        case 'float': // ふわふわ: 上下
-          dy = Math.sin(tt)*amp;
-          break;
-        case 'jelly': // ゼリー: 等倍拡縮
-          const s = 1 + (Math.sin(tt)*amp)/100;
-          sx = s; sy = s;
-          break;
-        case 'orbit': // 周回: 円運動＋微回転
-          dx = Math.cos(tt)*amp; dy = Math.sin(tt)*amp;
-          drot = tt*0.2;
-          break;
-        default:
-          // none
-          sx=1; sy=1; dx=0; dy=0; drot=0;
+        case 'squash': sx = 1 + (Math.sin(tt)*amp)/100; sy = 1 - (Math.sin(tt)*amp)/100; break;
+        case 'float': dy = Math.sin(tt)*amp; break;
+        case 'jelly': const s = 1 + (Math.sin(tt)*amp)/100; sx = s; sy = s; break;
+        case 'orbit': dx = Math.cos(tt)*amp; dy = Math.sin(tt)*amp; drot = tt*0.2; break;
       }
       ctx.translate(dx, dy);
       const fx = l.flipX ? -1 : 1;
@@ -1278,29 +1230,24 @@
     }
 
     function snapRect(x,y,w,h, self){
-      // スナップ: グリッド + 他レイヤー端への吸着
       let nx=x, ny=y, nw=Math.max(1,w), nh=Math.max(1,h);
       const enabled = ui.snapEnabled && ui.snapEnabled.checked;
       if (!enabled) return {x:nx,y:ny,w:nw,h:nh};
       const grid = Math.max(1, parseInt(ui.snapGrid?.value)||8);
       const tol = Math.max(1, parseInt(ui.snapTol?.value)||6);
-      // グリッドスナップ
       const gx = Math.round(nx/grid)*grid; const gy = Math.round(ny/grid)*grid;
       if (Math.abs(gx-nx)<=tol) nx=gx; if (Math.abs(gy-ny)<=tol) ny=gy;
       const gw = Math.round(nw/grid)*grid; const gh = Math.round(nh/grid)*grid;
       if (Math.abs(gw-nw)<=tol) nw=gw; if (Math.abs(gh-nh)<=tol) nh=gh;
-      // 他レイヤー端へ（x,y,w,hそれぞれ、左上右下）
       const edges = [];
       for (const l of layers){
         if (self && l.id===self.id) continue; if (!l.visible) continue;
         edges.push(l.x, l.x+l.w, l.y, l.y+l.h);
       }
-      // X方向
       for (const ex of edges){
         if (Math.abs(ex - nx) <= tol) nx = ex;
         if (Math.abs(ex - (nx+nw)) <= tol) nx = ex - nw;
       }
-      // Y方向
       for (const ey of edges){
         if (Math.abs(ey - ny) <= tol) ny = ey;
         if (Math.abs(ey - (ny+nh)) <= tol) ny = ey - nh;
@@ -1313,17 +1260,14 @@
       if (dur <= 0) return 0;
       const tt = t % dur;
       const cumul = g.cumul;
-      // find largest i s.t. cumul[i] <= tt
       let i = 0;
       while (i+1 < cumul.length && cumul[i+1] <= tt) i++;
       return i;
     }
 
-    // プレビューアニメーション
     let startTime = performance.now();
     function renderComposite(now){
       ctx.clearRect(0,0,stage.width, stage.height);
-      // 背景のチェッカー
       drawChecker(ctx, stage.width, stage.height, 12);
       const elapsed = now - startTime;
       drawAtTimeIntoContext(ctx, elapsed, true);
@@ -1335,7 +1279,6 @@
     }
     requestAnimationFrame(loop);
     
-    // 出力フレームプレビュー
     const fcv = document.getElementById('frameCanvas');
     const fctx = fcv.getContext('2d');
     const finput = document.getElementById('frameIndex');
@@ -1360,7 +1303,6 @@
       finput.max = Math.max(0, previewTimeline.length-1);
       finput.value = 0;
       finfo.textContent = `1/${previewTimeline.length}`;
-      // フレームキャンバスのサイズをステージに合わせる
       fcv.width = stage.width; fcv.height = stage.height;
       renderFramePreview(0);
     }
@@ -1380,7 +1322,6 @@
     finput.oninput = ()=> renderFramePreview(Number(finput.value));
 
     function computeMaxMsFromUI(frameDur){
-      // ループ回数優先で、各GIFのdurationの最大を1ループ長として採用。
       const loopCount = Math.max(1, parseInt(ui.loopCount?.value)||1);
       let maxGifDur = 0;
       for (const l of layers){
@@ -1393,7 +1334,6 @@
     }
 
     async function simulateMergedTimeline(timeline, frameDur){
-      // saveGIFのフレーム結合ロジックと同等の閾値を使って、実際に残るフレーム群を推定
       const out = [];
       const scalePct = Math.max(10, Math.min(200, parseInt(document.getElementById('exportScale').value)||100));
       const outW = Math.max(1, Math.round(stage.width * scalePct / 100));
@@ -1405,7 +1345,7 @@
 
       let pendingImage = null; let pendingDelay = 0;
       function percentChanged(a, b, delta){
-        let diff=0; const n=a.length; // RGBA
+        let diff=0; const n=a.length;
         for (let i=0;i<n;i+=4){
           const da = Math.abs(a[i]-b[i]) + Math.abs(a[i+1]-b[i+1]) + Math.abs(a[i+2]-b[i+2]) + Math.abs(a[i+3]-b[i+3]);
           if (da > delta) diff++;
@@ -1431,7 +1371,6 @@
       return out;
     }
 
-    // Motion UI
     function syncMotionPanel(){
       const l = layers.find(x=>x.id===selectedId);
       if (!l || l.type!=='png') {
@@ -1554,7 +1493,6 @@
       c.restore();
     }
 
-    // ドラッグ移動・リサイズ・等比スケール・回転
     let action = null;
     let dragOffX=0, dragOffY=0;
     let resizeEdge = null;
@@ -1647,7 +1585,6 @@
         const ox=startRect.x, oy=startRect.y, ow=startRect.w, oh=startRect.h;
         const rad = (Number(l.rot)||0) * Math.PI/180;
         
-        // マウス座標をレイヤーのローカル座標系に変換
         const mxg=mx-(ox+ow/2), myg=my-(oy+oh/2);
         const lx = mxg * Math.cos(-rad) - myg * Math.sin(-rad);
         const ly = mxg * Math.sin(-rad) + myg * Math.cos(-rad);
