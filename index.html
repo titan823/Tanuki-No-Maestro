@@ -243,6 +243,11 @@
       padding: 4px 6px;
       width: 80px !important;
     }
+    button, .btn, .footer-btn, .header-button, label, .add-file-label, summary, [role="button"] {
+      touch-action: manipulation;
+      -ms-touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
   </style>
 </head>
 <body>
@@ -862,7 +867,7 @@
             layers = []; selectedId=null; refreshLayerList();
         }
     };
-    ui.savePNG.onclick = () => {
+        ui.savePNG.onclick = () => {
       renderComposite(Date.now());
       stage.toBlob((blob)=>{
         if (!blob) return;
@@ -1694,6 +1699,24 @@
       if (e.key==='ArrowUp')    { const s=snapRect(l.x, l.y-d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
       if (e.key==='ArrowDown')  { const s=snapRect(l.x, l.y+d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
     });
+    (function setupDoubleTapBlock() {
+      const SELECTORS = 'button, .btn, .footer-btn, .header-button, label, .add-file-label, summary, [role="button"]';
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', function(e) {
+        const t = e.target.closest(SELECTORS);
+        if (!t) return;
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          e.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, { passive: false });
+      document.addEventListener('dblclick', function(e) {
+        const t = e.target.closest(SELECTORS);
+        if (!t) return;
+        e.preventDefault();
+      }, { passive: false });
+    })();
   })();
   </script>
 </body>
