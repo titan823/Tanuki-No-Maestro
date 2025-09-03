@@ -341,6 +341,27 @@
       color:#eee; font-size:11px; padding:1px 4px; border-radius:4px;
     }
     .gif-fe__thumb.selected { outline:2px solid var(--accent); }
+    /* サムネの右上 削除ボタン */
+    .gif-fe__thumb .gif-fe__del {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      background: rgba(0,0,0,0.6);
+      color: #eee;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .gif-fe__thumb .gif-fe__del:hover {
+      background: rgba(255,0,0,0.75);
+    }
   </style>
 </head>
 <body>
@@ -447,6 +468,24 @@
                       <input id="gifFEReplaceFile" type="file" accept="image/*" style="display:none">
                     </label>
                     <span class="muted">貼り付け（Ctrl+V / ⌘V）にも対応</span>
+                  </div>
+
+                  <!-- PNG転写（選択PNG→このフレームに焼き込み） -->
+                  <div class="gif-fe__stamp row small" style="margin-top:6px;">
+                    <label>転写元PNG
+                      <select id="gifFEStampSrc" style="min-width:160px">
+                        <!-- ここにPNGレイヤー一覧を動的挿入 -->
+                      </select>
+                    </label>
+                    <label>モード
+                      <select id="gifFEStampMode">
+                        <option value="world">現在の配置で（ワールド→GIFローカル）</option>
+                        <option value="fit">中央フィット</option>
+                        <option value="pixel">等倍中央</option>
+                      </select>
+                    </label>
+                    <label class="row small"><input type="checkbox" id="gifFEStampClear"> クリアしてから転写</label>
+                    <button id="gifFEStampDo" class="btn small primary">このフレームに転写</button>
                   </div>
                 
                   <div id="gifFEThumbs" class="gif-fe__thumbs"></div>
@@ -916,6 +955,11 @@
       gifFERight: document.getElementById('gifFERight'),
       gifFEReplaceFromComposite: document.getElementById('gifFEReplaceFromComposite'),
       gifFEReplaceFile: document.getElementById('gifFEReplaceFile'),
+      // PNG転写
+      gifFEStampSrc: document.getElementById('gifFEStampSrc'),
+      gifFEStampMode: document.getElementById('gifFEStampMode'),
+      gifFEStampClear: document.getElementById('gifFEStampClear'),
+      gifFEStampDo: document.getElementById('gifFEStampDo'),
     };
     const gifFEState = { idx: 0 }; // 現在のフレームインデックス
     const frameLock = { enabled: false, layerId: null, idx: 0 };
@@ -1005,6 +1049,7 @@
       selectedId = layer.id;
       refreshLayerList();
       syncGifFrameEditor();
+      rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
@@ -1013,6 +1058,7 @@
       if (selectedId === id) selectedId = layers.length ? layers[layers.length-1].id : null;
       refreshLayerList();
       syncGifFrameEditor();
+      rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
@@ -1106,7 +1152,7 @@
     async function loadGifLayer(name, buf){
       const reader = new GifReader(new Uint8Array(buf));
       const W = reader.width|0, H = reader.height|0;
-            const n = reader.numFrames();
+      const n = reader.numFrames();
       const frames = [];
       let duration = 0;
       let base = new Uint8ClampedArray(W*H*4);
@@ -1211,7 +1257,7 @@
           const abufDefault = UPNG.encode([rgbaU8.buffer], W, H, cnum, null, opts);
           let bestBuf = abufDefault;
           let usedHigh = false, usedUltra = false;
-          const wantHigh = ui.pngOptHigh && ui.pngOptHigh.checked;
+          const wantHigh = ui.pngOptHigh &&ui.pngOptHigh.checked;
           if (wantHigh && window.pako && pako.deflate) {
             const savedDeflate = pako.deflate;
             const savedDeflateRaw = pako.deflateRaw;
@@ -2303,6 +2349,7 @@
       ui.gifFEDelay.value = String(l.gif.frames[gifFEState.idx].delay|0);
 
       ui.gifFELock.checked = (frameLock.enabled && frameLock.layerId === l.id);
+      rebuildPngLayerOptions();
     }
 
     function rebuildGifThumbnails(layer) {
@@ -2328,8 +2375,25 @@
         delayTag.className = 'gif-fe__delay';
         delayTag.textContent = `${fr.delay|0}ms`;
 
+        const delBtn = document.createElement('div');
+        delBtn.className = 'gif-fe__del';
+        delBtn.title = 'このフレームを削除';
+        delBtn.textContent = '✖';
+        delBtn.onclick = (ev) => {
+          ev.stopPropagation();
+          if (layer.gif.frames.length <= 1) {
+            alert('最後のフレームは削除できません');
+            return;
+          }
+          layer.gif.frames.splice(i, 1);
+          if (gifFEState.idx >= layer.gif.frames.length) gifFEState.idx = layer.gif.frames.length - 1;
+          recalcGifTiming(layer);
+          syncGifFrameEditor();
+        };
+
         slot.appendChild(cnv);
         slot.appendChild(delayTag);
+        slot.appendChild(delBtn);
         slot.title = `#${i+1} (${fr.delay|0}ms)`;
         slot.onclick = () => {
           gifFEState.idx = i;
@@ -2507,6 +2571,122 @@
       octx.drawImage(cap, 0,0,w,h, 0,0,outW,outH);
       return out;
     }
+
+    function rebuildPngLayerOptions() {
+      if (!ui.gifFEStampSrc) return;
+      const cur = ui.gifFEStampSrc.value;
+      ui.gifFEStampSrc.innerHTML = '';
+      const pngs = layers.filter(l => l.type === 'png');
+      if (pngs.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = ''; opt.textContent = '（PNGレイヤーなし）';
+        ui.gifFEStampSrc.appendChild(opt);
+        ui.gifFEStampSrc.disabled = true;
+        ui.gifFEStampDo.disabled = true;
+      } else {
+        ui.gifFEStampSrc.disabled = false;
+        ui.gifFEStampDo.disabled = false;
+        for (const l of pngs) {
+          const opt = document.createElement('option');
+          opt.value = l.id;
+          opt.textContent = l.name || l.id;
+          ui.gifFEStampSrc.appendChild(opt);
+        }
+        if (cur) {
+          const found = Array.from(ui.gifFEStampSrc.options).some(o => o.value === cur);
+          if (found) ui.gifFEStampSrc.value = cur;
+        }
+      }
+    }
+
+    function drawSinglePngLayerWorld(ctx, pngLayer) {
+      ctx.save();
+      const cx = pngLayer.x + pngLayer.w/2;
+      const cy = pngLayer.y + pngLayer.h/2;
+      ctx.translate(cx, cy);
+      const rad = ((Number(pngLayer.rot)||0) * Math.PI/180);
+      if (pngLayer.flipX) ctx.scale(-1, 1);
+      ctx.rotate(rad);
+      ctx.globalAlpha = pngLayer.opacity;
+      ctx.drawImage(pngLayer.png.img, -pngLayer.w/2, -pngLayer.h/2, pngLayer.w, pngLayer.h);
+      ctx.restore();
+    }
+
+    function stampPngOntoGifFrame(gifLayer, pngLayer, dstCanvas, mode='world', clearBefore=false) {
+      const gctx = dstCanvas.getContext('2d');
+      if (clearBefore) gctx.clearRect(0, 0, dstCanvas.width, dstCanvas.height);
+
+      const outW = dstCanvas.width;
+      const outH = dstCanvas.height;
+
+      if (mode === 'world') {
+        const gifCX = gifLayer.x + gifLayer.w/2;
+        const gifCY = gifLayer.y + gifLayer.h/2;
+        const baseRad = ((Number(gifLayer.rot)||0) * Math.PI/180);
+
+        gctx.save();
+        gctx.imageSmoothingEnabled = true; gctx.imageSmoothingQuality = 'high';
+        gctx.translate(outW/2, outH/2);
+        const scaleX = outW / gifLayer.w;
+        const scaleY = outH / gifLayer.h;
+        gctx.scale(scaleX, scaleY);
+        gctx.rotate(-baseRad);
+        gctx.translate(-gifCX, -gifCY);
+
+        drawSinglePngLayerWorld(gctx, pngLayer);
+
+        gctx.restore();
+        return;
+      }
+
+      if (mode === 'fit') {
+        const src = pngLayer.png.img;
+        const iw = src.naturalWidth || src.width;
+        const ih = src.naturalHeight || src.height;
+        const scale = Math.min(outW/iw, outH/ih);
+        const dw = Math.round(iw * scale);
+        const dh = Math.round(ih * scale);
+        const dx = Math.floor((outW - dw)/2);
+        const dy = Math.floor((outH - dh)/2);
+        gctx.save();
+        gctx.globalAlpha = 1;
+        gctx.drawImage(src, dx, dy, dw, dh);
+        gctx.restore();
+        return;
+      }
+
+      if (mode === 'pixel') {
+        const src = pngLayer.png.img;
+        const iw = src.naturalWidth || src.width;
+        const ih = src.naturalHeight || src.height;
+        const dx = Math.floor(outW/2 - iw/2);
+        const dy = Math.floor(outH/2 - ih/2);
+        gctx.save();
+        gctx.imageSmoothingEnabled = false;
+        gctx.globalAlpha = 1;
+        gctx.drawImage(src, dx, dy);
+        gctx.restore();
+        return;
+      }
+    }
+
+    ui.gifFEStampDo?.addEventListener('click', ()=>{
+      const gifLayer = getSelectedLayer();
+      if (!gifLayer || gifLayer.type !== 'gif') { alert('GIFレイヤーを選択してください'); return; }
+      const srcId = ui.gifFEStampSrc?.value || '';
+      const pngLayer = layers.find(l => l.id === srcId && l.type === 'png');
+      if (!pngLayer) { alert('転写するPNGレイヤーが見つかりません'); return; }
+
+      const mode = ui.gifFEStampMode?.value || 'world';
+      const clearBefore = !!ui.gifFEStampClear?.checked;
+
+      const idx = gifFEState.idx|0;
+      const frame = gifLayer.gif.frames[idx];
+      if (!frame || !frame.canvas) { alert('フレームが無効です'); return; }
+
+      stampPngOntoGifFrame(gifLayer, pngLayer, frame.canvas, mode, clearBefore);
+      syncGifFrameEditor();
+    });
 
   })();
   </script>
