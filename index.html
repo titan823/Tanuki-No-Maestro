@@ -304,6 +304,43 @@
       background: linear-gradient(90deg, #4caf50, #81c784);
       transition: width .15s ease;
     }
+    /* === GIF Frame Editor === */
+    .gif-fe {
+      margin: 8px 12px 0;
+      padding: 10px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+    }
+    .gif-fe__head {
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+    }
+    .gif-fe__title { font-weight:600; }
+    .gif-fe__thumbs {
+      margin-top: 8px;
+      display: flex; gap: 6px;
+      overflow-x: auto; padding-bottom: 6px;
+    }
+    .gif-fe__thumb {
+      position: relative;
+      flex: 0 0 auto;
+      width: 84px; height: 84px;
+      border:1px solid var(--border);
+      border-radius:6px;
+      background:#111;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+    }
+    .gif-fe__thumb canvas {
+      max-width: 100%; max-height: 100%;
+      image-rendering: pixelated;
+    }
+    .gif-fe__thumb .gif-fe__delay {
+      position:absolute; left:4px; bottom:4px;
+      background: rgba(0,0,0,0.6);
+      color:#eee; font-size:11px; padding:1px 4px; border-radius:4px;
+    }
+    .gif-fe__thumb.selected { outline:2px solid var(--accent); }
   </style>
 </head>
 <body>
@@ -374,6 +411,46 @@
                 <div class="canvas-wrap">
                     <canvas id="stage" class="stage" width="512" height="512"></canvas>
                 </div>
+                <!-- GIFフレームエディタ（選択レイヤーがGIFのときのみ表示） -->
+                <section id="gifFrameEditor" class="gif-fe" hidden>
+                  <div class="gif-fe__head">
+                    <div class="gif-fe__title">GIFフレームエディタ</div>
+                    <div class="gif-fe__ctrl">
+                      <button id="gifFEPrev" class="btn small">◀</button>
+                      <span id="gifFEIndex" class="small muted">0 / 0</span>
+                      <button id="gifFENext" class="btn small">▶</button>
+                      <label class="small" style="margin-left:12px;">
+                        <input type="checkbox" id="gifFELock"> プレビュー固定（このGIF）
+                      </label>
+                    </div>
+                  </div>
+                
+                  <div class="gif-fe__tools row small" style="margin-top:6px;">
+                    <label>遅延(ms)
+                      <input id="gifFEDelay" type="number" min="10" step="10" value="100" style="width:90px">
+                    </label>
+                    <button id="gifFEDelayApplyAll" class="btn small" title="全フレームに同じ遅延を適用">全適用</button>
+                    <span class="muted" style="margin-left:8px">（10ms刻み推奨）</span>
+                
+                    <div style="flex:1"></div>
+                
+                    <button id="gifFEDup" class="btn small">複製</button>
+                    <button id="gifFELeft" class="btn small">左へ</button>
+                    <button id="gifFERight" class="btn small">右へ</button>
+                    <button id="gifFEDelete" class="btn small danger">削除</button>
+                  </div>
+                
+                  <div class="gif-fe__replace row small" style="margin-top:6px;">
+                    <button id="gifFEReplaceFromComposite" class="btn small" title="現在の合成結果でこのフレーム画像を置換">合成から差し替え</button>
+                    <label class="btn small" title="画像ファイルで差し替え">
+                      ファイルから…
+                      <input id="gifFEReplaceFile" type="file" accept="image/*" style="display:none">
+                    </label>
+                    <span class="muted">貼り付け（Ctrl+V / ⌘V）にも対応</span>
+                  </div>
+                
+                  <div id="gifFEThumbs" class="gif-fe__thumbs"></div>
+                </section>
                 <div class="hint">
                     プレビューは実時間で再生されます。重い場合はレイヤー数・サイズを抑えてください。<br>
                     <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd>: 1px移動 / <kbd>Shift</kbd> + 矢印: 10px移動
@@ -824,7 +901,24 @@
       encodeProgressText: $('#encodeProgressText', editorScreen),
       encodeProgressPercent: $('#encodeProgressPercent', editorScreen),
       encodeProgressBar: $('#encodeProgressBar', editorScreen),
+      // GIFフレームエディタ
+      gifFrameEditor: document.getElementById('gifFrameEditor'),
+      gifFEThumbs: document.getElementById('gifFEThumbs'),
+      gifFEPrev: document.getElementById('gifFEPrev'),
+      gifFENext: document.getElementById('gifFENext'),
+      gifFEIndex: document.getElementById('gifFEIndex'),
+      gifFELock: document.getElementById('gifFELock'),
+      gifFEDelay: document.getElementById('gifFEDelay'),
+      gifFEDelayApplyAll: document.getElementById('gifFEDelayApplyAll'),
+      gifFEDup: document.getElementById('gifFEDup'),
+      gifFEDelete: document.getElementById('gifFEDelete'),
+      gifFELeft: document.getElementById('gifFELeft'),
+      gifFERight: document.getElementById('gifFERight'),
+      gifFEReplaceFromComposite: document.getElementById('gifFEReplaceFromComposite'),
+      gifFEReplaceFile: document.getElementById('gifFEReplaceFile'),
     };
+    const gifFEState = { idx: 0 }; // 現在のフレームインデックス
+    const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
     
     function placeEncodeProgress() {
@@ -910,6 +1004,7 @@
       layers.push(layer);
       selectedId = layer.id;
       refreshLayerList();
+      syncGifFrameEditor();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
@@ -917,6 +1012,7 @@
       layers = layers.filter(l => l.id !== id);
       if (selectedId === id) selectedId = layers.length ? layers[layers.length-1].id : null;
       refreshLayerList();
+      syncGifFrameEditor();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
@@ -963,7 +1059,7 @@
         range.oninput=()=>{ l.opacity = parseFloat(range.value); };
         op.append('不透明度', range);
         item.append(head, pos, op);
-        item.onclick = ()=>{ selectedId=l.id; refreshLayerList(); syncMotionPanel(); };
+        item.onclick = ()=>{ selectedId=l.id; refreshLayerList(); syncMotionPanel(); syncGifFrameEditor(); };
         ui.layers.appendChild(item);
       }
     }
@@ -1010,7 +1106,7 @@
     async function loadGifLayer(name, buf){
       const reader = new GifReader(new Uint8Array(buf));
       const W = reader.width|0, H = reader.height|0;
-      const n = reader.numFrames();
+            const n = reader.numFrames();
       const frames = [];
       let duration = 0;
       let base = new Uint8ClampedArray(W*H*4);
@@ -1054,6 +1150,7 @@
     ui.clearAll.onclick = () => {
         if(confirm("すべてのレイヤーを削除しますか？")){
             layers = []; selectedId=null; refreshLayerList();
+            syncGifFrameEditor();
             if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
         }
     };
@@ -1395,7 +1492,10 @@
             applyMotionDraw(targetCtx, l, t);
           }
         } else if (l.type === 'gif') {
-          const idx = frameIndexAtTime(l.gif, t);
+          let idx = frameIndexAtTime(l.gif, t);
+          if (frameLock.enabled && frameLock.layerId === l.id) {
+            idx = Math.max(0, Math.min(frameLock.idx|0, l.gif.frames.length-1));
+          }
           const fr = l.gif.frames[idx];
           const cx = l.x + l.w/2, cy = l.y + l.h/2;
           targetCtx.translate(cx, cy);
@@ -2015,6 +2115,7 @@
         selectedId = lTop.id;
         refreshLayerList();
         syncMotionPanel();
+        syncGifFrameEditor();
       }
       const l = layers.find(x => x.id === selectedId);
       if (!l || !l.visible) return;
@@ -2180,9 +2281,234 @@
         }
       }, { passive: true });
     })();
+
+    function getSelectedLayer() {
+      return layers.find(x => x.id === selectedId) || null;
+    }
+
+    function syncGifFrameEditor() {
+      const l = getSelectedLayer();
+      if (!l || l.type !== 'gif') {
+        ui.gifFrameEditor.hidden = true;
+        return;
+      }
+      ui.gifFrameEditor.hidden = false;
+
+      const N = l.gif.frames.length;
+      gifFEState.idx = Math.max(0, Math.min(gifFEState.idx, N-1));
+
+      rebuildGifThumbnails(l);
+
+      ui.gifFEIndex.textContent = `${gifFEState.idx+1} / ${N}`;
+      ui.gifFEDelay.value = String(l.gif.frames[gifFEState.idx].delay|0);
+
+      ui.gifFELock.checked = (frameLock.enabled && frameLock.layerId === l.id);
+    }
+
+    function rebuildGifThumbnails(layer) {
+      const N = layer.gif.frames.length;
+      ui.gifFEThumbs.innerHTML = '';
+      for (let i = 0; i < N; i++) {
+        const fr = layer.gif.frames[i];
+        const slot = document.createElement('div');
+        slot.className = 'gif-fe__thumb' + (i===gifFEState.idx ? ' selected' : '');
+        const cnv = document.createElement('canvas');
+
+        const tw = 78, th = 78;
+        cnv.width = tw; cnv.height = th;
+        const c2 = cnv.getContext('2d');
+        c2.imageSmoothingEnabled = true; c2.imageSmoothingQuality = 'high';
+        c2.clearRect(0,0,tw,th);
+        const fw = fr.canvas.width, fh = fr.canvas.height;
+        const scale = Math.min(tw/fw, th/fh);
+        const dw = Math.round(fw*scale), dh = Math.round(fh*scale);
+        c2.drawImage(fr.canvas, Math.floor((tw-dw)/2), Math.floor((th-dh)/2), dw, dh);
+
+        const delayTag = document.createElement('div');
+        delayTag.className = 'gif-fe__delay';
+        delayTag.textContent = `${fr.delay|0}ms`;
+
+        slot.appendChild(cnv);
+        slot.appendChild(delayTag);
+        slot.title = `#${i+1} (${fr.delay|0}ms)`;
+        slot.onclick = () => {
+          gifFEState.idx = i;
+          syncGifFrameEditor();
+        };
+        ui.gifFEThumbs.appendChild(slot);
+      }
+    }
+
+    function recalcGifTiming(layer) {
+      let dur = 0;
+      const cumul = [];
+      for (const fr of layer.gif.frames) {
+        cumul.push(dur);
+        dur += Math.max(10, fr.delay|0);
+      }
+      layer.gif.duration = dur;
+      layer.gif.cumul = cumul;
+      if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
+    }
+
+    ui.gifFEPrev?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      gifFEState.idx = Math.max(0, gifFEState.idx-1);
+      syncGifFrameEditor();
+    });
+    ui.gifFENext?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      gifFEState.idx = Math.min(l.gif.frames.length-1, gifFEState.idx+1);
+      syncGifFrameEditor();
+    });
+
+    ui.gifFEDelay?.addEventListener('change', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      const v = Math.max(10, parseInt(ui.gifFEDelay.value)||10);
+      l.gif.frames[gifFEState.idx].delay = v;
+      recalcGifTiming(l);
+      syncGifFrameEditor();
+    });
+
+    ui.gifFEDelayApplyAll?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      const v = Math.max(10, parseInt(ui.gifFEDelay.value)||10);
+      for (const fr of l.gif.frames) fr.delay = v;
+      recalcGifTiming(l);
+      syncGifFrameEditor();
+    });
+
+    ui.gifFEDup?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      const i = gifFEState.idx;
+      const src = l.gif.frames[i];
+      const dup = document.createElement('canvas');
+      dup.width = src.canvas.width; dup.height = src.canvas.height;
+      dup.getContext('2d').drawImage(src.canvas, 0, 0);
+      l.gif.frames.splice(i+1, 0, { canvas: dup, delay: src.delay|0 });
+      gifFEState.idx = i+1;
+      recalcGifTiming(l);
+      syncGifFrameEditor();
+    });
+
+    ui.gifFEDelete?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      if (l.gif.frames.length <= 1) { alert('最後のフレームは削除できません'); return; }
+      l.gif.frames.splice(gifFEState.idx, 1);
+      gifFEState.idx = Math.max(0, gifFEState.idx-1);
+      recalcGifTiming(l);
+      syncGifFrameEditor();
+    });
+
+    ui.gifFELeft?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      const i = gifFEState.idx; if (i<=0) return;
+      const [fr] = l.gif.frames.splice(i,1);
+      l.gif.frames.splice(i-1,0,fr);
+      gifFEState.idx = i-1;
+      recalcGifTiming(l);
+      syncGifFrameEditor();
+    });
+    ui.gifFERight?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      const i = gifFEState.idx; if (i>=l.gif.frames.length-1) return;
+      const [fr] = l.gif.frames.splice(i,1);
+      l.gif.frames.splice(i+1,0,fr);
+      gifFEState.idx = i+1;
+      recalcGifTiming(l);
+      syncGifFrameEditor();
+    });
+
+    ui.gifFELock?.addEventListener('change', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      if (ui.gifFELock.checked) {
+        frameLock.enabled = true;
+        frameLock.layerId = l.id;
+        frameLock.idx = gifFEState.idx;
+      } else {
+        frameLock.enabled = false;
+        frameLock.layerId = null;
+      }
+    });
+
+    ui.gifFEReplaceFile?.addEventListener('change', async (e)=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      const file = e.target.files?.[0]; if (!file) return;
+      try {
+        const bmp = await createImageBitmap(file);
+        replaceCurrentFrameWithImage(l, bmp);
+        bmp.close?.();
+        recalcGifTiming(l);
+        syncGifFrameEditor();
+      } catch(err){ alert('画像の読み込みに失敗: '+err.message); }
+      e.target.value = '';
+    });
+
+    document.addEventListener('paste', async (ev)=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif' || document.activeElement.tagName === 'INPUT') return;
+      const items = ev.clipboardData?.items || [];
+      for (const it of items) {
+        if (it.type.startsWith('image/')) {
+          const file = it.getAsFile(); if (!file) continue;
+          const bmp = await createImageBitmap(file);
+          replaceCurrentFrameWithImage(l, bmp);
+          bmp.close?.();
+          recalcGifTiming(l);
+          syncGifFrameEditor();
+          break;
+        }
+      }
+    });
+
+    ui.gifFEReplaceFromComposite?.addEventListener('click', ()=>{
+      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      const now = performance.now();
+      const t = now - startTime;
+      const canvas = captureCompositeForLayer(l, t);
+      l.gif.frames[gifFEState.idx].canvas = canvas;
+      recalcGifTiming(l);
+      syncGifFrameEditor();
+    });
+
+    function replaceCurrentFrameWithImage(layer, imageBitmapOrImg) {
+      const i = gifFEState.idx;
+      const fr = layer.gif.frames[i];
+      const W = fr.canvas.width, H = fr.canvas.height;
+      const dst = document.createElement('canvas'); dst.width=W; dst.height=H;
+      const c = dst.getContext('2d');
+      const iw = imageBitmapOrImg.width, ih = imageBitmapOrImg.height;
+      const scale = Math.min(W/iw, H/ih);
+      const dw = Math.round(iw*scale), dh = Math.round(ih*scale);
+      c.clearRect(0,0,W,H);
+      c.drawImage(imageBitmapOrImg, Math.floor((W-dw)/2), Math.floor((H-dh)/2), dw, dh);
+      layer.gif.frames[i].canvas = dst;
+    }
+
+    function captureCompositeForLayer(layer, tMs) {
+      const w = Math.max(1, layer.w|0), h = Math.max(1, layer.h|0);
+      const cap = document.createElement('canvas'); cap.width=w; cap.height=h;
+      const cctx = cap.getContext('2d');
+      cctx.save();
+      cctx.beginPath();
+      cctx.rect(0,0,w,h); cctx.clip();
+      const cx = layer.x + layer.w/2, cy = layer.y + layer.h/2;
+      const baseRad = ((Number(layer.rot)||0) * Math.PI/180);
+      cctx.translate(w/2, h/2);
+      cctx.rotate(-baseRad);
+      cctx.translate(-cx, -cy);
+      drawAtTimeIntoContext(cctx, tMs, true);
+      cctx.restore();
+      const outW = layer.origW || layer.gif.frames[0].canvas.width;
+      const outH = layer.origH || layer.gif.frames[0].canvas.height;
+      if (outW === w && outH === h) return cap;
+      const out = document.createElement('canvas'); out.width=outW; out.height=outH;
+      const octx = out.getContext('2d');
+      octx.imageSmoothingEnabled = true; octx.imageSmoothingQuality = 'high';
+      octx.drawImage(cap, 0,0,w,h, 0,0,outW,outH);
+      return out;
+    }
+
   })();
   </script>
 </body>
 </html>
-
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
