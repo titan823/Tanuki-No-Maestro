@@ -311,6 +311,7 @@
       border-top: 1px solid var(--border);
       background: var(--bg-tertiary);
       border-radius: 8px;
+      max-width: 100%;
     }
     .gif-fe__head {
       display:flex; align-items:center; justify-content:space-between; gap:8px;
@@ -341,7 +342,6 @@
       color:#eee; font-size:11px; padding:1px 4px; border-radius:4px;
     }
     .gif-fe__thumb.selected { outline:2px solid var(--accent); }
-    /* サムネの右上 削除ボタン */
     .gif-fe__thumb .gif-fe__del {
       position: absolute;
       top: 2px;
@@ -362,6 +362,78 @@
     .gif-fe__thumb .gif-fe__del:hover {
       background: rgba(255,0,0,0.75);
     }
+    .gif-fe--collapsed .gif-fe__tools,
+    .gif-fe--collapsed .gif-fe__replace,
+    .gif-fe--collapsed .gif-fe__stamp,
+    .gif-fe--collapsed .gif-fe__thumbs { display: none !important; }
+    @media (max-width: 640px) {
+      .gif-fe {
+        margin: 6px 8px 0;
+        padding: 8px;
+        border-radius: 6px;
+        max-height: min(48vh, 360px);
+        overflow-y: auto;
+      }
+      .gif-fe__head {
+        position: sticky;
+        top: 0;
+        background: var(--bg-tertiary);
+        z-index: 2;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--border);
+      }
+      .stage {
+        max-height: 42vh;
+      }
+      .gif-fe__thumbs { gap: 4px; }
+      .gif-fe__thumb { width: 68px; height: 68px; }
+      .gif-fe__thumb .gif-fe__del { width: 16px; height: 16px; font-size: 11px; }
+      .gif-fe__tools,
+      .gif-fe__replace,
+      .gif-fe__stamp {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .gif-fe__tools .btn.small,
+      .gif-fe__replace .btn.small,
+      .gif-fe__stamp .btn.small {
+        padding: 5px 8px;
+      }
+      .gif-fe label select,
+      .gif-fe label input[type="number"],
+      .gif-fe label input[type="text"] {
+        width: 100%;
+      }
+    }
+    @media (max-width: 400px) {
+      .gif-fe__tools,
+      .gif-fe__replace,
+      .gif-fe__stamp {
+        grid-template-columns: 1fr;
+      }
+      .gif-fe__thumb { width: 60px; height: 60px; }
+    }
+    @media (max-width: 640px) {
+      .gif-fe--sheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+        margin: 0;
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        border: 1px solid var(--border);
+        box-shadow: 0 -6px 16px rgba(0,0,0,.35);
+        max-height: min(60svh, 420px);
+        background: var(--bg-tertiary);
+        z-index: 60;
+      }
+      .gif-fe--sheet .gif-fe__head {
+        cursor: default;
+      }
+    }
+    .gif-fe--collapsed #gifFEToggle { transform: rotate(-90deg); }
   </style>
 </head>
 <body>
@@ -440,9 +512,9 @@
                       <button id="gifFEPrev" class="btn small">◀</button>
                       <span id="gifFEIndex" class="small muted">0 / 0</span>
                       <button id="gifFENext" class="btn small">▶</button>
-                      <label class="small" style="margin-left:12px;">
-                        <input type="checkbox" id="gifFELock"> プレビュー固定（このGIF）
-                      </label>
+                      <label class="small" style="margin-left:8px;"><input type="checkbox" id="gifFELock"> プレビュー固定</label>
+                      <button id="gifFEToggle" class="btn small" title="折りたたみ/展開" style="margin-left:6px;">▾</button>
+                      <button id="gifFESheetToggle" class="btn small" title="モバイル用ボトムシート切替">□</button>
                     </div>
                   </div>
                 
@@ -1257,7 +1329,7 @@
           const abufDefault = UPNG.encode([rgbaU8.buffer], W, H, cnum, null, opts);
           let bestBuf = abufDefault;
           let usedHigh = false, usedUltra = false;
-          const wantHigh = ui.pngOptHigh &&ui.pngOptHigh.checked;
+          const wantHigh = ui.pngOptHigh && ui.pngOptHigh.checked;
           if (wantHigh && window.pako && pako.deflate) {
             const savedDeflate = pako.deflate;
             const savedDeflateRaw = pako.deflateRaw;
@@ -2687,6 +2759,64 @@
       stampPngOntoGifFrame(gifLayer, pngLayer, frame.canvas, mode, clearBefore);
       syncGifFrameEditor();
     });
+
+    // ---- Responsive: Compact & Bottom Sheet ----
+    (function setupGifFEAdaptive() {
+      const fe = document.getElementById('gifFrameEditor');
+      const btnToggle = document.getElementById('gifFEToggle');
+      const btnSheet = document.getElementById('gifFESheetToggle');
+
+      const LS_COLLAPSED = 'gifFE_collapsed';
+      const LS_SHEET = 'gifFE_sheet';
+
+      function applyCollapsedState(fromInit=false) {
+        const collapsed = localStorage.getItem(LS_COLLAPSED) === '1';
+        fe.classList.toggle('gif-fe--collapsed', collapsed);
+        if (!fromInit) {
+          localStorage.setItem(LS_COLLAPSED, fe.classList.contains('gif-fe--collapsed') ? '1' : '0');
+        }
+      }
+
+      function applySheetState(fromInit=false) {
+        const sheet = localStorage.getItem(LS_SHEET) === '1';
+        const isMobile = window.innerWidth <= 640;
+        fe.classList.toggle('gif-fe--sheet', sheet && isMobile);
+        if (!fromInit) {
+          localStorage.setItem(LS_SHEET, (sheet && isMobile) ? '1' : '0');
+        }
+      }
+
+      // 初期復元
+      if (window.innerWidth <= 640 && localStorage.getItem(LS_COLLAPSED) === null) {
+        localStorage.setItem(LS_COLLAPSED, '1');
+      }
+      applyCollapsedState(true);
+      applySheetState(true);
+
+      btnToggle?.addEventListener('click', () => {
+        fe.classList.toggle('gif-fe--collapsed');
+        localStorage.setItem(LS_COLLAPSED, fe.classList.contains('gif-fe--collapsed') ? '1' : '0');
+      });
+      btnSheet?.addEventListener('click', () => {
+        const sheet = fe.classList.toggle('gif-fe--sheet');
+        if (window.innerWidth <= 640 && sheet) {
+          localStorage.setItem(LS_SHEET, '1');
+        } else {
+          fe.classList.remove('gif-fe--sheet');
+          localStorage.setItem(LS_SHEET, '0');
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        if (window.innerWidth > 640) {
+          fe.classList.remove('gif-fe--sheet');
+        } else {
+          if (localStorage.getItem(LS_SHEET) === '1') {
+            fe.classList.add('gif-fe--sheet');
+          }
+        }
+      });
+    })();
 
   })();
   </script>
