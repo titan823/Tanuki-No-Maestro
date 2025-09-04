@@ -312,7 +312,7 @@
       border-top: 1px solid var(--border);
       background: var(--bg-tertiary);
       border-radius: 8px;
-      max-width: 100%; /* [修正] 親コンテナからはみ出さないようにする */
+      max-width: 100%;
     }
     .gif-fe__head {
       display:flex; align-items:center; justify-content:space-between; gap:8px;
@@ -324,15 +324,11 @@
       gap: 6px;
       overflow-x: auto;
       padding-bottom: 6px;
-      /* [修正] スムーズなスクロールのための設定 */
       -webkit-overflow-scrolling: touch;
       touch-action: pan-x;
-
-      /* [修正] スクロールバーの見た目を調整 */
       scrollbar-width: thin;
       scrollbar-color: var(--border) transparent;
     }
-    /* [追加] Webkit系ブラウザ用のスクロールバースタイル */
     .gif-fe__thumbs::-webkit-scrollbar {
       height: 4px;
     }
@@ -349,7 +345,6 @@
       background:#111;
       display:flex; align-items:center; justify-content:center;
       cursor:pointer;
-      /* [修正] 透明度とアウトラインの変化を滑らかにする */
       transition: opacity 0.2s ease-out, outline-color 0.2s ease-out;
     }
     .gif-fe__thumb canvas {
@@ -506,8 +501,9 @@
 
                   <!-- タブ切り替えUI -->
                   <div class="gif-fe__tabs">
-                    <button id="gifFETabThumbs" class="gif-fe__tab-btn active" data-tab="thumbs">フレーム一覧</button>
-                    <button id="gifFETabEdit" class="gif-fe__tab-btn" data-tab="edit">フレーム編集</button>
+                    <button id="gifFETabThumbs" class="gif-fe__tab-btn active" data-tab="thumbs">一覧</button>
+                    <button id="gifFETabEdit1" class="gif-fe__tab-btn" data-tab="edit1">編集1</button>
+                    <button id="gifFETabEdit2" class="gif-fe__tab-btn" data-tab="edit2">編集2</button>
                   </div>
 
                   <!-- タブパネル -->
@@ -516,8 +512,8 @@
                     <div id="gifFEPanelThumbs" class="gif-fe__panel active">
                       <div id="gifFEThumbs" class="gif-fe__thumbs"></div>
                     </div>
-                    <!-- フレーム編集パネル -->
-                    <div id="gifFEPanelEdit" class="gif-fe__panel">
+                    <!-- フレーム編集1パネル (基本操作) -->
+                    <div id="gifFEPanelEdit1" class="gif-fe__panel">
                       <div class="gif-fe__tools row small">
                         <label>遅延(ms)
                           <input id="gifFEDelay" type="number" min="10" step="10" value="100" style="width:90px">
@@ -531,7 +527,9 @@
                         <button id="gifFERight" class="btn small">右へ</button>
                         <button id="gifFEDelete" class="btn small danger">削除</button>
                       </div>
-                      <hr class="gif-fe__hr">
+                    </div>
+                    <!-- フレーム編集2パネル (画像操作) -->
+                    <div id="gifFEPanelEdit2" class="gif-fe__panel">
                       <div class="gif-fe__replace row small">
                         <button id="gifFEReplaceFromComposite" class="btn small" title="現在の合成結果でこのフレーム画像を置換">合成から差し替え</button>
                         <label class="btn small" title="画像ファイルで差し替え">
@@ -1030,9 +1028,11 @@
       gifFEStampDo: document.getElementById('gifFEStampDo'),
       // タブUI
       gifFETabThumbs: document.getElementById('gifFETabThumbs'),
-      gifFETabEdit: document.getElementById('gifFETabEdit'),
+      gifFETabEdit1: document.getElementById('gifFETabEdit1'),
+      gifFETabEdit2: document.getElementById('gifFETabEdit2'),
       gifFEPanelThumbs: document.getElementById('gifFEPanelThumbs'),
-      gifFEPanelEdit: document.getElementById('gifFEPanelEdit'),
+      gifFEPanelEdit1: document.getElementById('gifFEPanelEdit1'),
+      gifFEPanelEdit2: document.getElementById('gifFEPanelEdit2'),
     };
     const gifFEState = { idx: 0 }; // 現在のフレームインデックス
     const frameLock = { enabled: false, layerId: null, idx: 0 };
@@ -2407,9 +2407,11 @@
     
     function switchGifEditorTab(tabName) {
       ui.gifFETabThumbs.classList.toggle('active', tabName === 'thumbs');
-      ui.gifFETabEdit.classList.toggle('active', tabName === 'edit');
+      ui.gifFETabEdit1.classList.toggle('active', tabName === 'edit1');
+      ui.gifFETabEdit2.classList.toggle('active', tabName === 'edit2');
       ui.gifFEPanelThumbs.classList.toggle('active', tabName === 'thumbs');
-      ui.gifFEPanelEdit.classList.toggle('active', tabName === 'edit');
+      ui.gifFEPanelEdit1.classList.toggle('active', tabName === 'edit1');
+      ui.gifFEPanelEdit2.classList.toggle('active', tabName === 'edit2');
     }
 
     function syncGifFrameEditor() {
@@ -2418,7 +2420,9 @@
         ui.gifFrameEditor.hidden = true;
         return;
       }
-      switchGifEditorTab('thumbs');
+      if (!ui.gifFEPanelThumbs.classList.contains('active') && !ui.gifFEPanelEdit1.classList.contains('active') && !ui.gifFEPanelEdit2.classList.contains('active')) {
+        switchGifEditorTab('thumbs');
+      }
       ui.gifFrameEditor.hidden = false;
 
       const N = l.gif.frames.length;
@@ -2432,7 +2436,7 @@
       ui.gifFELock.checked = (frameLock.enabled && frameLock.layerId === l.id);
       rebuildPngLayerOptions();
     }
-
+    
     function updateThumbFade() {
       const l = getSelectedLayer();
       if (!l || l.type !== 'gif') return;
@@ -2519,7 +2523,8 @@
     }
 
     ui.gifFETabThumbs?.addEventListener('click', () => switchGifEditorTab('thumbs'));
-    ui.gifFETabEdit?.addEventListener('click', () => switchGifEditorTab('edit'));
+    ui.gifFETabEdit1?.addEventListener('click', () => switchGifEditorTab('edit1'));
+    ui.gifFETabEdit2?.addEventListener('click', () => switchGifEditorTab('edit2'));
 
     ui.gifFEPrev?.addEventListener('click', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
