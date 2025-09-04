@@ -1,3 +1,12 @@
+大変な状況の中、ご連絡いただきありがとうございます。ご自身でコードを編集することが不可能であるという点を深く理解いたしました。ご安心ください。
+
+先ほどご提案した仕様（スワイプ操作、中央表示、フェードアウト効果など）をすべて適用した、**完全なHTMLファイル**を以下に用意しました。
+
+このコードは一切省略しておりません。以下のコードブロック全体をコピーして、新しいHTMLファイルとして保存・使用していただければ、すぐに修正が適用された状態でご利用いただけます。
+
+---
+
+```html
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -318,9 +327,32 @@
     .gif-fe__title { font-weight:600; }
     .gif-fe__thumbs {
       margin-top: 8px;
-      display: flex; gap: 6px;
-      overflow-x: auto; padding-bottom: 6px;
+      display: flex;
+      gap: 6px;
+      /* overflow-x: auto; を scroll に変更して常にスクロールバー領域を確保 */
+      overflow-x: scroll;
+      padding-bottom: 6px;
+      /* スクロールバーを非表示にする (スクロールはJSで制御) */
+      scrollbar-width: none; /* Firefox */
+      -ms-overflow-style: none; /* IE/Edge */
+      /* iOSでの慣性スクロールを有効に */
+      -webkit-overflow-scrolling: touch;
+      /* JSでのスムーズスクロールのため */
+      scroll-behavior: smooth;
+      /* ユーザーによる選択やテキストのハイライトを防ぐ */
+      user-select: none;
+      -webkit-user-select: none;
     }
+    .gif-fe__thumbs::-webkit-scrollbar {
+      display: none; /* Chrome/Safari */
+    }
+
+    /* スワイプ中のカーソルスタイルを追加 */
+    .gif-fe__thumbs.swiping {
+      scroll-behavior: auto; /* スワイプ中はスムーズスクロールを無効化 */
+      cursor: grabbing;
+    }
+    
     .gif-fe__thumb {
       position: relative;
       flex: 0 0 auto;
@@ -329,7 +361,9 @@
       border-radius:6px;
       background:#111;
       display:flex; align-items:center; justify-content:center;
-      cursor:pointer;
+      cursor: grab; /* 通常時のカーソルをgrabに */
+      /* 視覚効果のためのトランジションを追加 */
+      transition: transform 0.25s ease-out, opacity 0.25s ease-out;
     }
     .gif-fe__thumb canvas {
       max-width: 100%; max-height: 100%;
@@ -1014,6 +1048,12 @@
       gifFEPanelEdit: document.getElementById('gifFEPanelEdit'),
     };
     const gifFEState = { idx: 0 }; // 現在のフレームインデックス
+    const gifFESwipeState = {
+      isDown: false,
+      startX: 0,
+      scrollLeft: 0,
+      isSwiping: false, // クリックとスワイプを区別するため
+    };
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
     
@@ -1161,6 +1201,55 @@
         ui.layers.appendChild(item);
       }
     }
+    /**
+     * フレームサムネイルの視覚効果（中央からの距離に応じてフェード＆スケール）を更新する
+     */
+    function updateGifThumbVisuals() {
+      if (!ui.gifFEThumbs) return;
+      const container = ui.gifFEThumbs;
+      const containerCenter = container.scrollLeft + container.offsetWidth / 2;
+      const thumbs = $$('.gif-fe__thumb', container);
+      
+      thumbs.forEach(thumb => {
+        const thumbCenter = thumb.offsetLeft + thumb.offsetWidth / 2;
+        const distance = Math.abs(containerCenter - thumbCenter);
+        
+        // コンテナ幅の40%を基準に減衰率を計算
+        const falloff = container.offsetWidth * 0.4;
+        let opacity = Math.max(0.1, 1 - (distance / falloff));
+        let scale = Math.max(0.85, 1 - (distance / (falloff * 2)));
+
+        // 選択中のものは強制的に1にする
+        if (thumb.classList.contains('selected')) {
+          opacity = 1;
+          scale = 1;
+        }
+
+        thumb.style.opacity = opacity;
+        thumb.style.transform = `scale(${scale})`;
+      });
+    }
+
+    /**
+     * 指定したインデックスのサムネイルが中央に来るようにスクロールする
+     * @param {number} index - フレームのインデックス
+     * @param {('smooth'|'auto')} behavior - スクロール挙動
+     */
+    function scrollGifThumbToCenter(index, behavior = 'smooth') {
+      const container = ui.gifFEThumbs;
+      const thumb = $$('.gif-fe__thumb', container)[index];
+      if (!thumb) return;
+      
+      const containerWidth = container.offsetWidth;
+      const thumbWidth = thumb.offsetWidth;
+      const targetScrollLeft = thumb.offsetLeft - (containerWidth / 2) + (thumbWidth / 2);
+
+      container.scrollTo({
+        left: targetScrollLeft,
+        behavior: behavior
+      });
+    }
+
     function fitCanvasToContent(){
       if (!layers.length) return;
       let minX=0, minY=0, maxX=0, maxY=0;
@@ -2397,13 +2486,13 @@
         ui.gifFrameEditor.hidden = true;
         return;
       }
-      switchGifEditorTab('thumbs');
       ui.gifFrameEditor.hidden = false;
 
       const N = l.gif.frames.length;
       gifFEState.idx = Math.max(0, Math.min(gifFEState.idx, N-1));
-
-      rebuildGifThumbnails(l);
+      
+      rebuildGifThumbnails(l); 
+      switchGifEditorTab('thumbs');
 
       ui.gifFEIndex.textContent = `${gifFEState.idx+1} / ${N}`;
       ui.gifFEDelay.value = String(l.gif.frames[gifFEState.idx].delay|0);
@@ -2414,13 +2503,14 @@
 
     function rebuildGifThumbnails(layer) {
       const N = layer.gif.frames.length;
-      ui.gifFEThumbs.innerHTML = '';
+      const container = ui.gifFEThumbs;
+      container.innerHTML = '';
+      
       for (let i = 0; i < N; i++) {
         const fr = layer.gif.frames[i];
         const slot = document.createElement('div');
         slot.className = 'gif-fe__thumb' + (i===gifFEState.idx ? ' selected' : '');
         const cnv = document.createElement('canvas');
-
         const tw = 78, th = 78;
         cnv.width = tw; cnv.height = th;
         const c2 = cnv.getContext('2d');
@@ -2455,12 +2545,85 @@
         slot.appendChild(delayTag);
         slot.appendChild(delBtn);
         slot.title = `#${i+1} (${fr.delay|0}ms)`;
-        slot.onclick = () => {
-          gifFEState.idx = i;
-          syncGifFrameEditor();
-        };
-        ui.gifFEThumbs.appendChild(slot);
+
+        slot.dataset.index = i; // インデックスを保持
+        container.appendChild(slot);
       }
+
+      container.onscroll = null;
+      container.onpointerdown = null;
+      window.onpointermove = null;
+      window.onpointerup = null;
+
+      container.onscroll = () => requestAnimationFrame(updateGifThumbVisuals);
+      
+      const handlePointerDown = (e) => {
+        gifFESwipeState.isDown = true;
+        gifFESwipeState.isSwiping = false;
+        container.classList.add('swiping');
+        gifFESwipeState.startX = e.pageX - container.offsetLeft;
+        gifFESwipeState.scrollLeft = container.scrollLeft;
+        container.setPointerCapture(e.pointerId);
+      };
+
+      const handlePointerUp = (e) => {
+        gifFESwipeState.isDown = false;
+        container.classList.remove('swiping');
+        container.releasePointerCapture(e.pointerId);
+
+        if (gifFESwipeState.isSwiping) {
+          const containerCenter = container.scrollLeft + container.offsetWidth / 2;
+          const thumbs = $$('.gif-fe__thumb', container);
+          let closestIndex = -1;
+          let minDistance = Infinity;
+
+          thumbs.forEach((thumb, index) => {
+            const thumbCenter = thumb.offsetLeft + thumb.offsetWidth / 2;
+            const distance = Math.abs(containerCenter - thumbCenter);
+            if (distance < minDistance) {
+              minDistance = distance;
+              closestIndex = index;
+            }
+          });
+
+          if (closestIndex !== -1) {
+            gifFEState.idx = closestIndex;
+            syncGifFrameEditor();
+          }
+        } else {
+            const targetThumb = e.target.closest('.gif-fe__thumb');
+            if (targetThumb && targetThumb.dataset.index) {
+                const newIndex = parseInt(targetThumb.dataset.index, 10);
+                if (gifFEState.idx !== newIndex) {
+                    gifFEState.idx = newIndex;
+                    syncGifFrameEditor();
+                } else {
+                    scrollGifThumbToCenter(newIndex);
+                }
+            }
+        }
+      };
+      
+      const handlePointerMove = (e) => {
+        if (!gifFESwipeState.isDown) return;
+        e.preventDefault();
+        const x = e.pageX - container.offsetLeft;
+        const walk = (x - gifFESwipeState.startX);
+        if (Math.abs(walk) > 5) {
+          gifFESwipeState.isSwiping = true;
+        }
+        container.scrollLeft = gifFESwipeState.scrollLeft - walk;
+      };
+
+      container.onpointerdown = handlePointerDown;
+      container.onpointerup = handlePointerUp;
+      container.onpointerleave = handlePointerUp;
+      container.onpointermove = handlePointerMove;
+      
+      setTimeout(() => {
+        scrollGifThumbToCenter(gifFEState.idx, 'auto');
+        updateGifThumbVisuals();
+      }, 0);
     }
 
     function recalcGifTiming(layer) {
@@ -2755,3 +2918,4 @@
   </script>
 </body>
 </html>
+     
