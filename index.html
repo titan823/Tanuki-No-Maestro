@@ -515,6 +515,10 @@
                   <div class="gif-fe__panels">
                     <!-- フレーム一覧パネル -->
                     <div id="gifFEPanelThumbs" class="gif-fe__panel active">
+                      <div class="row small" style="justify-content: flex-end; margin-bottom: 8px;">
+                        <button id="gifFEDup" class="btn small">選択フレームを複製</button>
+                        <button id="gifFEDelete" class="btn small danger">選択フレームを削除</button>
+                      </div>
                       <div id="gifFEThumbs" class="gif-fe__thumbs"></div>
                     </div>
                     <!-- フレーム編集1パネル (基本操作) -->
@@ -527,10 +531,7 @@
                         <span class="muted" style="margin-left:8px">（10ms刻み推奨）</span>
                       </div>
                       <div class="row small" style="margin-top:8px;">
-                        <button id="gifFEDup" class="btn small">複製</button>
-                        <button id="gifFELeft" class="btn small">左へ</button>
-                        <button id="gifFERight" class="btn small">右へ</button>
-                        <button id="gifFEDelete" class="btn small danger">削除</button>
+                        <button id="gifFEUndo" class="btn small" disabled>元に戻す</button>
                       </div>
                     </div>
                     <!-- フレーム編集2パネル (画像操作) -->
@@ -1019,8 +1020,7 @@
       gifFEDelayApplyAll: document.getElementById('gifFEDelayApplyAll'),
       gifFEDup: document.getElementById('gifFEDup'),
       gifFEDelete: document.getElementById('gifFEDelete'),
-      gifFELeft: document.getElementById('gifFELeft'),
-      gifFERight: document.getElementById('gifFERight'),
+      gifFEUndo: document.getElementById('gifFEUndo'),
       gifFEReplaceFromComposite: document.getElementById('gifFEReplaceFromComposite'),
       gifFEReplaceFile: document.getElementById('gifFEReplaceFile'),
       // PNG転写
@@ -1037,6 +1037,8 @@
       gifFEPanelEdit2: document.getElementById('gifFEPanelEdit2'),
     };
     const gifFEState = { idx: 0 }; // 現在のフレームインデックス
+    const gifUndoHistory = new Map(); // GIFレイヤーごとのUndo履歴
+    const UNDO_HISTORY_MAX = 20;    // 履歴の最大保存件数
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
     
@@ -1129,6 +1131,7 @@
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
     function removeLayer(id){
+      gifUndoHistory.delete(id);
       layers = layers.filter(l => l.id !== id);
       if (selectedId === id) selectedId = layers.length ? layers[layers.length-1].id : null;
       refreshLayerList();
@@ -2285,7 +2288,7 @@
       }
       
       if (!l || !l.visible) return; // いずれのケースでも、最終的に操作対象のレイヤーがあるか確認
-
+      
       const cxh = l.x + l.w / 2, cyh = l.y + l.h / 2;
       const rad = (Number(l.rot) || 0) * Math.PI / 180;
       const r = handleRadiusFor(p.type);
@@ -2483,6 +2486,8 @@
 
       ui.gifFELock.checked = (frameLock.enabled && frameLock.layerId === l.id);
       rebuildPngLayerOptions();
+      const history = gifUndoHistory.get(l.id);
+      ui.gifFEUndo.disabled = !history || history.length === 0;
     }
     
     function updateThumbFade() {
@@ -2504,6 +2509,32 @@
           
           thumb.style.opacity = opacity;
       });
+    }
+
+    function saveGifUndoState(layer) {
+      if (!layer || layer.type !== 'gif') return;
+      
+      const framesClone = layer.gif.frames.map(f => ({
+          delay: f.delay,
+          canvas: (() => {
+              const c = document.createElement('canvas');
+              c.width = f.canvas.width;
+              c.height = f.canvas.height;
+              c.getContext('2d').drawImage(f.canvas, 0, 0);
+              return c;
+          })()
+      }));
+
+      if (!gifUndoHistory.has(layer.id)) {
+        gifUndoHistory.set(layer.id, []);
+      }
+      const history = gifUndoHistory.get(layer.id);
+      history.push(framesClone);
+
+      if (history.length > UNDO_HISTORY_MAX) {
+        history.shift();
+      }
+      ui.gifFEUndo.disabled = false;
     }
 
     function rebuildGifThumbnails(layer) {
@@ -2539,6 +2570,7 @@
             alert('最後のフレームは削除できません');
             return;
           }
+          saveGifUndoState(layer);
           layer.gif.frames.splice(i, 1);
           if (gifFEState.idx >= layer.gif.frames.length) gifFEState.idx = layer.gif.frames.length - 1;
           recalcGifTiming(layer);
@@ -2587,6 +2619,7 @@
 
     ui.gifFEDelay?.addEventListener('change', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      saveGifUndoState(l);
       const v = Math.max(10, parseInt(ui.gifFEDelay.value)||10);
       l.gif.frames[gifFEState.idx].delay = v;
       recalcGifTiming(l);
@@ -2595,6 +2628,7 @@
 
     ui.gifFEDelayApplyAll?.addEventListener('click', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      saveGifUndoState(l);
       const v = Math.max(10, parseInt(ui.gifFEDelay.value)||10);
       for (const fr of l.gif.frames) fr.delay = v;
       recalcGifTiming(l);
@@ -2603,6 +2637,7 @@
 
     ui.gifFEDup?.addEventListener('click', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      saveGifUndoState(l);
       const i = gifFEState.idx;
       const src = l.gif.frames[i];
       const dup = document.createElement('canvas');
@@ -2617,29 +2652,33 @@
     ui.gifFEDelete?.addEventListener('click', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
       if (l.gif.frames.length <= 1) { alert('最後のフレームは削除できません'); return; }
+      saveGifUndoState(l);
       l.gif.frames.splice(gifFEState.idx, 1);
       gifFEState.idx = Math.max(0, gifFEState.idx-1);
       recalcGifTiming(l);
       syncGifFrameEditor();
     });
 
-    ui.gifFELeft?.addEventListener('click', ()=>{
-      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
-      const i = gifFEState.idx; if (i<=0) return;
-      const [fr] = l.gif.frames.splice(i,1);
-      l.gif.frames.splice(i-1,0,fr);
-      gifFEState.idx = i-1;
+    ui.gifFEUndo?.addEventListener('click', () => {
+      const l = getSelectedLayer();
+      if (!l || l.type !== 'gif') return;
+
+      const history = gifUndoHistory.get(l.id);
+      if (!history || history.length === 0) return;
+
+      const prevState = history.pop();
+      l.gif.frames = prevState;
+      
+      if (gifFEState.idx >= l.gif.frames.length) {
+          gifFEState.idx = l.gif.frames.length - 1;
+      }
+      
       recalcGifTiming(l);
       syncGifFrameEditor();
-    });
-    ui.gifFERight?.addEventListener('click', ()=>{
-      const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
-      const i = gifFEState.idx; if (i>=l.gif.frames.length-1) return;
-      const [fr] = l.gif.frames.splice(i,1);
-      l.gif.frames.splice(i+1,0,fr);
-      gifFEState.idx = i+1;
-      recalcGifTiming(l);
-      syncGifFrameEditor();
+
+      if (history.length === 0) {
+        ui.gifFEUndo.disabled = true;
+      }
     });
 
     ui.gifFELock?.addEventListener('change', ()=>{
@@ -2658,6 +2697,7 @@
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
       const file = e.target.files?.[0]; if (!file) return;
       try {
+        saveGifUndoState(l);
         const bmp = await createImageBitmap(file);
         replaceCurrentFrameWithImage(l, bmp);
         bmp.close?.();
@@ -2673,6 +2713,7 @@
       for (const it of items) {
         if (it.type.startsWith('image/')) {
           const file = it.getAsFile(); if (!file) continue;
+          saveGifUndoState(l);
           const bmp = await createImageBitmap(file);
           replaceCurrentFrameWithImage(l, bmp);
           bmp.close?.();
@@ -2685,6 +2726,7 @@
 
     ui.gifFEReplaceFromComposite?.addEventListener('click', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
+      saveGifUndoState(l);
       const now = performance.now();
       const t = now - startTime;
       const canvas = captureCompositeForLayer(l, t);
@@ -2836,6 +2878,7 @@
       const pngLayer = layers.find(l => l.id === srcId && l.type === 'png');
       if (!pngLayer) { alert('転写するPNGレイヤーが見つかりません'); return; }
 
+      saveGifUndoState(gifLayer);
       const mode = ui.gifFEStampMode?.value || 'world';
       const clearBefore = !!ui.gifFEStampClear?.checked;
 
