@@ -1134,6 +1134,7 @@
         this.currentIndex--;
         
         const previousState = this.history[this.currentIndex];
+        this.addReferencesForState(previousState);
         this.restoreState(previousState);
         
         this.isExecutingUndo = false;
@@ -1145,15 +1146,15 @@
         if (this.currentIndex >= this.history.length - 1) return false;
         
         this.isExecutingUndo = true;
-        this.currentIndex++;
+        
+        const previousState = this.history[this.currentIndex];
+        this.decreaseReferencesForState(previousState);
 
+        this.currentIndex++;
+        
         const nextState = this.history[this.currentIndex];
         this.addReferencesForState(nextState);
-        
         this.restoreState(nextState);
-
-        const previousState = this.history[this.currentIndex - 1];
-        this.decreaseReferencesForState(previousState);
         
         this.isExecutingUndo = false;
         this.updateUI();
@@ -1432,29 +1433,13 @@
     });
 
     function addLayer(layer){
-      const currentState = layers.map(l => l.id);
-      
       layers.push(layer);
       selectedId = layer.id;
-      
-      const nextState = layers.map(l => l.id);
-      
-      const originalUndoRecord = undoManager.recordState;
-      undoManager.recordState = () => {};
-      
-      const newLayers = layers.filter(l => !currentState.includes(l.id));
-      for(const l of newLayers) {
-          if(l.type === 'png' && l.png) resourceManager.savePngResource(l.id, l.png);
-          if(l.type === 'gif' && l.gif) resourceManager.saveGifResource(l.id, l.gif);
-      }
-      
       refreshLayerList();
       syncGifFrameEditor();
       rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
-      
-      undoManager.recordState = originalUndoRecord;
       undoManager.recordState('レイヤー追加: ' + layer.name);
     }
     function removeLayer(id){
@@ -1934,7 +1919,7 @@
       if (mode === 'boundary' || mode === 'combined') {
         for (const l of layers) {
           if (!l.visible) continue;
-          if (l.type === 'gif') {
+          if (l.type === 'gif' && l.gif) {
             const dur = l.gif.duration||0; if (dur<=0) continue;
             const loopCount = Math.max(1, Math.floor(maxMs / dur));
             for (let k=0;k<=loopCount;k++){
@@ -1960,7 +1945,7 @@
         if (!l.visible) continue;
         targetCtx.save();
         targetCtx.globalAlpha = l.opacity;
-        if (l.type === 'png') {
+        if (l.type === 'png' && l.png) {
           const m = (applyMotion && l.motion) ? l.motion : null;
           if (!m || m.type==='none') {
             const cx = l.x + l.w/2, cy = l.y + l.h/2;
@@ -1972,18 +1957,20 @@
           } else {
             applyMotionDraw(targetCtx, l, t);
           }
-        } else if (l.type === 'gif') {
+        } else if (l.type === 'gif' && l.gif) {
           let idx = frameIndexAtTime(l.gif, t);
           if (frameLock.enabled && frameLock.layerId === l.id) {
             idx = Math.max(0, Math.min(frameLock.idx|0, l.gif.frames.length-1));
           }
           const fr = l.gif.frames[idx];
-          const cx = l.x + l.w/2, cy = l.y + l.h/2;
-          targetCtx.translate(cx, cy);
-          const rad = ((Number(l.rot)||0) * Math.PI/180);
-          if (l.flipX) { targetCtx.scale(-1, 1); }
-          targetCtx.rotate(rad);
-          targetCtx.drawImage(fr.canvas, -l.w/2, -l.h/2, l.w|0, l.h|0);
+          if (fr && fr.canvas) {
+              const cx = l.x + l.w/2, cy = l.y + l.h/2;
+              targetCtx.translate(cx, cy);
+              const rad = ((Number(l.rot)||0) * Math.PI/180);
+              if (l.flipX) { targetCtx.scale(-1, 1); }
+              targetCtx.rotate(rad);
+              targetCtx.drawImage(fr.canvas, -l.w/2, -l.h/2, l.w|0, l.h|0);
+          }
         }
         targetCtx.restore();
       }
@@ -2059,6 +2046,7 @@
       return {x:nx,y:ny,w:nw,h:nh};
     }
     function frameIndexAtTime(g, t){
+      if (!g) return 0;
       const dur = g.duration;
       if (dur <= 0) return 0;
       const tt = t % dur;
@@ -2231,15 +2219,13 @@
     });
 
     btnPrev.addEventListener('click', () => {
-      const idx = Math.max(0, Math.min(Number(finput.value)||0, previewTimeline.length-1));
-      playback.idx = idx;
-      playback.elapsedInFrame = 0;
+      const idx = Math.max(0, Number(finput.value) - 1);
+      renderFramePreview(idx);
       updatePreviewTimeLabel();
     });
     btnNext.addEventListener('click', () => {
-      const idx = Math.max(0, Math.min(Number(finput.value)||0, previewTimeline.length-1));
-      playback.idx = idx;
-      playback.elapsedInFrame = 0;
+      const idx = Math.min(previewTimeline.length - 1, Number(finput.value) + 1);
+      renderFramePreview(idx);
       updatePreviewTimeLabel();
     });
     // --- END: Preview Playback Logic ---
@@ -2286,8 +2272,6 @@
       playback.idx = idx;
     }
     btnBuild.onclick = rebuildPreview;
-    btnPrev.onclick = ()=> renderFramePreview(Number(finput.value)-1);
-    btnNext.onclick = ()=> renderFramePreview(Number(finput.value)+1);
     
     function computeMaxMsFromUI(frameDur){
       if (ui.autoFromGifs?.checked) {
@@ -2298,7 +2282,7 @@
       let maxGifDur = 0;
       for (const l of layers){
         if (!l.visible) continue;
-        if (l.type==='gif') maxGifDur = Math.max(maxGifDur, l.gif.duration||0);
+        if (l.type==='gif' && l.gif) maxGifDur = Math.max(maxGifDur, l.gif.duration||0);
       }
       const maxS = Math.max(1, Math.min(60, parseInt(ui.maxDuration.value)||10));
       if (maxGifDur>0) return Math.min(maxS*1000, maxGifDur*loopCount);
@@ -2861,7 +2845,7 @@
 
     function syncGifFrameEditor() {
       const l = getSelectedLayer();
-      if (!l || l.type !== 'gif') {
+      if (!l || l.type !== 'gif' || !l.gif) {
         ui.gifFrameEditor.hidden = true;
         return;
       }
@@ -2932,6 +2916,10 @@
     }
 
     function rebuildGifThumbnails(layer) {
+      if (!layer.gif) {
+        ui.gifFEThumbs.innerHTML = '';
+        return;
+      }
       const N = layer.gif.frames.length;
       ui.gifFEThumbs.innerHTML = '';
       for (let i = 0; i < N; i++) {
@@ -2986,6 +2974,7 @@
     }
 
     function recalcGifTiming(layer) {
+      if (!layer || !layer.gif) return;
       let dur = 0;
       const cumul = [];
       for (const fr of layer.gif.frames) {
