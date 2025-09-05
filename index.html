@@ -1198,7 +1198,7 @@
           stage.width = state.canvasWidth;
           stage.height = state.canvasHeight;
           ui.canvasW.value = String(state.canvasWidth);
-          ui.canvasH.value = String(state.canvasHeight);
+                    ui.canvasH.value = String(state.canvasHeight);
         }
         
         refreshLayerList();
@@ -1486,6 +1486,38 @@
       refreshLayerList();
       undoManager.recordState('レイヤー順序変更');
     }
+    function duplicateLayer(id) {
+      const originalLayer = layers.find(l => l.id === id);
+      if (!originalLayer) return;
+
+      const newLayer = { ...originalLayer }; // 既存のプロパティをコピー
+
+      // 新しいレイヤーにユニークな値を設定
+      newLayer.id = crypto.randomUUID();
+      newLayer.name = originalLayer.name + ' のコピー';
+      // 見分けがつくように少しずらす
+      newLayer.x = originalLayer.x + 10;
+      newLayer.y = originalLayer.y + 10;
+
+      // 画像/GIFリソースの参照カウントを増やす
+      resourceManager.addReference(originalLayer.id, originalLayer.type);
+
+      // 元のレイヤーのすぐ上に新しいレイヤーを挿入
+      const originalIndex = layers.findIndex(l => l.id === id);
+      if (originalIndex > -1) {
+        layers.splice(originalIndex + 1, 0, newLayer);
+      } else {
+        layers.push(newLayer); // 念のためフォールバック
+      }
+
+      // アプリケーションの状態を更新
+      selectedId = newLayer.id;
+      refreshLayerList();
+      syncGifFrameEditor();
+      syncMotionPanel();
+      if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
+      undoManager.recordState('レイヤー複製: ' + newLayer.name);
+    }
     function refreshLayerList(){
       ui.layers.innerHTML = '';
       for (let i = layers.length - 1; i >= 0; i--) {
@@ -1510,8 +1542,13 @@
         });
         const up = document.createElement('button'); up.className='btn small'; up.textContent='↑'; up.title='一つ前面へ'; up.onclick=()=>moveLayer(l.id, +1);
         const down = document.createElement('button'); down.className='btn small'; down.textContent='↓'; down.title='一つ背面へ'; down.onclick=()=>moveLayer(l.id, -1);
+        const dup = document.createElement('button');
+        dup.className = 'btn small';
+        dup.textContent = '複製';
+        dup.title = 'レイヤーを複製';
+        dup.onclick = () => duplicateLayer(l.id);
         const del = document.createElement('button'); del.className='btn small danger'; del.textContent='削除'; del.onclick=()=>removeLayer(l.id);
-        controls.append(vis, up, down, del);
+        controls.append(vis, up, down, dup, del);
         head.append(title, controls);
         const pos = document.createElement('div'); pos.className='row small';
         const posx = document.createElement('input'); posx.type='number'; posx.value=l.x;
