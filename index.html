@@ -87,10 +87,6 @@
         cursor: pointer;
         min-width: 30px;
     }
-    .header-button:disabled {
-      color: #777;
-      cursor: not-allowed;
-    }
     #settings-screen .app-header {
         justify-content: space-between;
     }
@@ -419,6 +415,15 @@
       border-top: 1px dashed var(--border);
       margin: 12px 0;
     }
+    /* === 追加: Undo/Redoボタンのスタイル === */
+    #globalUndo:disabled, #globalRedo:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    #globalUndo:not(:disabled):hover, #globalRedo:not(:disabled):hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -483,8 +488,6 @@
                 </div>
                 <h1>レイヤーエディタ</h1>
                 <div class="header-group right">
-                    <button id="undoGlobal" class="header-button" title="元に戻す" disabled>↶</button>
-                    <button id="redoGlobal" class="header-button" title="やり直し" disabled>↷</button>
                     <button id="clearAll" class="header-button danger" aria-label="全レイヤー削除" title="全レイヤー削除">🗑️</button>
                     <label class="header-button add-file-label" aria-label="ファイルを追加" title="PNG/GIFを追加">
                         +
@@ -913,88 +916,6 @@
 
   <script>
   ;(() => {
-    // === Global Undo/Redo for layer editing ===
-    const history2 = {
-      undo: [],
-      redo: [],
-      pre: null,
-      max: 50,
-    };
-    function captureState() {
-      return {
-        selectedId,
-        canvasW: stage.width,
-        canvasH: stage.height,
-        layers: layers.map((l, idx) => ({
-          id: l.id,
-          ref: l, // 元のオブジェクト参照（画像は参照だけ保持）
-          orderIndex: idx,
-          type: l.type,
-          name: l.name,
-          visible: !!l.visible,
-          opacity: Number(l.opacity)||1,
-          x: l.x|0, y: l.y|0, w: l.w|0, h: l.h|0,
-          rot: Number(l.rot)||0,
-          flipX: !!l.flipX,
-          motion: l.motion ? JSON.parse(JSON.stringify(l.motion)) : null,
-        })),
-      };
-    }
-    function restoreState(s) {
-      if (!s) return;
-      // レイヤー順序を s.layers の順に並べ替え、プロパティを上書き
-      const id2cur = new Map(layers.map(l => [l.id, l]));
-      const restored = [];
-      for (const sl of s.layers) {
-        const cur = id2cur.get(sl.id) || sl.ref; // 可能なら既存を使う、なければ参照を再利用
-        if (!cur) continue;
-        cur.name = sl.name;
-        cur.visible = sl.visible;
-        cur.opacity = sl.opacity;
-        cur.x = sl.x; cur.y = sl.y; cur.w = sl.w; cur.h = sl.h;
-        cur.rot = sl.rot; cur.flipX = sl.flipX;
-        cur.motion = sl.motion;
-        restored.push(cur);
-      }
-      layers = restored;
-      selectedId = s.selectedId || null;
-      stage.width = s.canvasW|0; stage.height = s.canvasH|0;
-      if (ui.canvasW) ui.canvasW.value = String(stage.width);
-      if (ui.canvasH) ui.canvasH.value = String(stage.height);
-      refreshLayerList();
-      syncGifFrameEditor();
-      updateUndoButtons();
-    }
-    function pushUndo(preState) {
-      if (!preState) return;
-      history2.undo.push(preState);
-      if (history2.undo.length > history2.max) history2.undo.shift();
-      history2.redo.length = 0;
-      updateUndoButtons();
-    }
-    function doUndo() {
-      if (history2.undo.length === 0) return;
-      const cur = captureState();
-      const prev = history2.undo.pop();
-      history2.redo.push(cur);
-      restoreState(prev);
-      updateUndoButtons();
-    }
-    function doRedo() {
-      if (history2.redo.length === 0) return;
-      const cur = captureState();
-      const next = history2.redo.pop();
-      history2.undo.push(cur);
-      restoreState(next);
-      updateUndoButtons();
-    }
-    function updateUndoButtons() {
-      const u = document.getElementById('undoGlobal');
-      const r = document.getElementById('redoGlobal');
-      if (u) u.disabled = history2.undo.length === 0;
-      if (r) r.disabled = history2.redo.length === 0;
-    }
-    
     const state = {
         currentScreen: 'editor',
     };
@@ -1048,6 +969,133 @@
     })();
     let layers = [];
     let selectedId = null;
+
+    // === グローバルUndoシステムの追加 ===
+    const undoManager = {
+      history: [],
+      currentIndex: -1,
+      maxHistory: 50,
+      isExecutingUndo: false, // Undo/Redo実行中フラグ
+      
+      recordState(description = '') {
+        if (this.isExecutingUndo) return;
+        this.history = this.history.slice(0, this.currentIndex + 1);
+        
+        // 現在の状態をディープコピーして保存
+        const state = {
+          timestamp: Date.now(),
+          description,
+          // JSON.stringifyは関数やDOM要素を保存できないため、シリアライズ可能なデータのみを対象
+          layers: JSON.parse(JSON.stringify(layers, (key, value) => {
+            if (key === 'png' || key === 'gif') return undefined; // 画像データは除外
+            return value;
+          })),
+          selectedId,
+          canvasWidth: stage.width,
+          canvasHeight: stage.height
+        };
+        
+        this.history.push(state);
+        this.currentIndex++;
+        
+        if (this.history.length > this.maxHistory) {
+          this.history.shift();
+          this.currentIndex--;
+        }
+        
+        this.updateUI();
+      },
+      
+      undo() {
+        if (this.currentIndex <= 0) return false;
+        
+        this.isExecutingUndo = true;
+        this.currentIndex--;
+        this.restoreState(this.history[this.currentIndex]);
+        this.isExecutingUndo = false;
+        this.updateUI();
+        return true;
+      },
+      
+      redo() {
+        if (this.currentIndex >= this.history.length - 1) return false;
+        
+        this.isExecutingUndo = true;
+        this.currentIndex++;
+        this.restoreState(this.history[this.currentIndex]);
+        this.isExecutingUndo = false;
+        this.updateUI();
+        return true;
+      },
+      
+      restoreState(state) {
+        // 保存された状態からレイヤーを復元
+        const newLayers = state.layers.map(savedLayer => {
+          const currentLayer = layers.find(l => l.id === savedLayer.id);
+          // 画像データ(png.img, gif.frames)は現在の参照を維持
+          if (currentLayer) {
+            return {
+              ...savedLayer,
+              png: currentLayer.png,
+              gif: currentLayer.gif
+            };
+          }
+          // レイヤーが削除されて履歴から復活する場合など
+          return savedLayer;
+        });
+        
+        layers = newLayers;
+        selectedId = state.selectedId;
+        
+        if (state.canvasWidth && state.canvasHeight) {
+          stage.width = state.canvasWidth;
+          stage.height = state.canvasHeight;
+          ui.canvasW.value = String(state.canvasWidth);
+          ui.canvasH.value = String(state.canvasHeight);
+        }
+        
+        refreshLayerList();
+        syncMotionPanel();
+        syncGifFrameEditor();
+      },
+      
+      updateUI() {
+        let undoBtn = document.getElementById('globalUndo');
+        let redoBtn = document.getElementById('globalRedo');
+        
+        if (!undoBtn) {
+          const leftGroup = document.querySelector('#editor-screen .header-group.left');
+          if (leftGroup) {
+            undoBtn = document.createElement('button');
+            undoBtn.id = 'globalUndo';
+            undoBtn.className = 'header-button';
+            undoBtn.innerHTML = '↶';
+            undoBtn.title = '元に戻す (Ctrl+Z)';
+            undoBtn.onclick = () => this.undo();
+            
+            redoBtn = document.createElement('button');
+            redoBtn.id = 'globalRedo';
+            redoBtn.className = 'header-button';
+            redoBtn.innerHTML = '↷';
+            redoBtn.title = 'やり直す (Ctrl+Y)';
+            redoBtn.onclick = () => this.redo();
+            
+            leftGroup.appendChild(undoBtn);
+            leftGroup.appendChild(redoBtn);
+          }
+        }
+        
+        if (undoBtn) undoBtn.disabled = this.currentIndex <= 0;
+        if (redoBtn) redoBtn.disabled = this.currentIndex >= this.history.length - 1;
+      },
+      
+      clear() {
+        this.history = [];
+        this.currentIndex = -1;
+        this.updateUI();
+      }
+    };
+    
     const ui = {
       fileInput:  $('#fileInput', editorScreen),
       clearAll:   $('#clearAll', editorScreen),
@@ -1131,55 +1179,6 @@
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
     
-    document.getElementById('undoGlobal')?.addEventListener('click', () => {
-      if (!ui.gifFrameEditor.hidden) { ui.gifFEUndo?.click(); return; }
-      doUndo();
-    });
-    document.getElementById('redoGlobal')?.addEventListener('click', () => {
-      if (!ui.gifFrameEditor.hidden) { return; }
-      doRedo();
-    });
-    
-    let keyMoveSession = null;
-    window.addEventListener('keyup', (e) => {
-      if (!keyMoveSession) return;
-      const isArrow = (e.key==='ArrowLeft'||e.key==='ArrowRight'||e.key==='ArrowUp'||e.key==='ArrowDown');
-      if (isArrow) {
-        pushUndo(keyMoveSession.pre);
-        keyMoveSession = null;
-      }
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (!(e.ctrlKey || e.metaKey)) {
-        const l = layers.find(x => x.id===selectedId); if (!l) return;
-        let d = 1;
-        if (e.shiftKey) d = 10;
-        if (e.ctrlKey || e.metaKey) d = 50;
-        const isArrow = (e.key==='ArrowLeft'||e.key==='ArrowRight'||e.key==='ArrowUp'||e.key==='ArrowDown');
-        if (isArrow) {
-          if (!keyMoveSession) keyMoveSession = { pre: captureState() };
-        }
-        if (e.key==='ArrowLeft')  { const s=snapRect(l.x-d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
-        if (e.key==='ArrowRight') { const s=snapRect(l.x+d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
-        if (e.key==='ArrowUp')    { const s=snapRect(l.x, l.y-d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
-        if (e.key==='ArrowDown')  { const s=snapRect(l.x, l.y+d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); }
-        return;
-      }
-      const key = e.key.toLowerCase();
-      if (key === 'z') {
-        e.preventDefault();
-        if (!ui.gifFrameEditor.hidden) {
-          if (document.activeElement.tagName !== 'INPUT') ui.gifFEUndo?.click();
-        } else {
-          if (e.shiftKey) doRedo(); else doUndo();
-        }
-      } else if (key === 'y') {
-        e.preventDefault();
-        if (ui.gifFrameEditor.hidden) doRedo();
-      }
-    });
-    
     function placeEncodeProgress() {
       if (!ui.encodeProgress) return;
       const footer = editorScreen.querySelector('.editor-footer');
@@ -1259,19 +1258,22 @@
       if (ui.autoFromGifs.checked) recalcAutoFromGifs();
     });
 
+    const layerAssets = new Map(); // 画像データを永続的に保持
+
     function addLayer(layer){
-      const pre = captureState();
       layers.push(layer);
+      layerAssets.set(layer.id, { png: layer.png, gif: layer.gif });
       selectedId = layer.id;
       refreshLayerList();
       syncGifFrameEditor();
       rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
-      pushUndo(pre);
+      undoManager.recordState('レイヤー追加: ' + layer.name);
     }
     function removeLayer(id){
-      const pre = captureState();
+      const layer = layers.find(l => l.id === id);
+      const layerName = layer ? layer.name : '';
       gifUndoHistory.delete(id);
       layers = layers.filter(l => l.id !== id);
       if (selectedId === id) selectedId = layers.length ? layers[layers.length-1].id : null;
@@ -1280,10 +1282,9 @@
       rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
-      pushUndo(pre);
+      undoManager.recordState('レイヤー削除: ' + layerName);
     }
     function moveLayer(id, dir){
-      const pre = captureState();
       const idx = layers.findIndex(l => l.id === id);
       if (idx < 0) return;
       const ni = idx + dir;
@@ -1291,7 +1292,7 @@
       const [it] = layers.splice(idx,1);
       layers.splice(ni,0,it);
       refreshLayerList();
-      pushUndo(pre);
+      undoManager.recordState('レイヤー順序変更');
     }
     function refreshLayerList(){
       ui.layers.innerHTML = '';
@@ -1305,15 +1306,14 @@
         head.className = 'layer-head';
         const title = document.createElement('div');
         title.className = 'layer-title';
-                title.textContent = `${l.name} (${l.type.toUpperCase()})${l.motion && l.type==='png' ? ' •motion' : ''}`;
+        title.textContent = `${l.name} (${l.type.toUpperCase()})${l.motion && l.type==='png' ? ' •motion' : ''}`;
         const controls = document.createElement('div');
         controls.className = 'controls';
         const vis = document.createElement('input'); vis.type='checkbox'; vis.checked = l.visible; vis.title='表示/非表示';
         vis.addEventListener('change', ()=>{
-          const pre = captureState();
-          l.visible = vis.checked;
-          if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
-          pushUndo(pre);
+           l.visible = vis.checked;
+           if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
+           undoManager.recordState('レイヤー表示切替');
         });
         const up = document.createElement('button'); up.className='btn small'; up.textContent='↑'; up.title='一つ前面へ'; up.onclick=()=>moveLayer(l.id, +1);
         const down = document.createElement('button'); down.className='btn small'; down.textContent='↓'; down.title='一つ背面へ'; down.onclick=()=>moveLayer(l.id, -1);
@@ -1323,19 +1323,21 @@
         const pos = document.createElement('div'); pos.className='row small';
         const posx = document.createElement('input'); posx.type='number'; posx.value=l.x;
         const posy = document.createElement('input'); posy.type='number'; posy.value=l.y;
-        posx.onfocus = posy.onfocus = () => { if (!history2.pre) history2.pre = captureState(); };
-        posx.onchange=()=>{ l.x = parseInt(posx.value)||0; if (history2.pre) { pushUndo(history2.pre); history2.pre = null; } };
-        posy.onchange=()=>{ l.y = parseInt(posy.value)||0; if (history2.pre) { pushUndo(history2.pre); history2.pre = null; } };
+        posx.onchange=()=>{ l.x = parseInt(posx.value)||0; undoManager.recordState('レイヤー位置変更'); };
+        posy.onchange=()=>{ l.y = parseInt(posy.value)||0; undoManager.recordState('レイヤー位置変更'); };
         pos.append('X', posx, 'Y', posy);
         const op = document.createElement('div'); op.className='row small';
         const range = document.createElement('input'); range.type='range'; range.min='0'; range.max='1'; range.step='0.01'; range.value=String(l.opacity);
         range.className='opacity';
-        range.addEventListener('pointerdown', ()=>{ if (!history2.pre) history2.pre = captureState(); });
-        range.addEventListener('change', ()=>{ if (history2.pre) { pushUndo(history2.pre); history2.pre = null; } });
         range.oninput=()=>{ l.opacity = parseFloat(range.value); };
+        range.onchange=()=>{ undoManager.recordState('不透明度変更'); };
         op.append('不透明度', range);
         item.append(head, pos, op);
-        item.onclick = ()=>{ selectedId=l.id; refreshLayerList(); syncMotionPanel(); syncGifFrameEditor(); };
+        item.onclick = (e)=>{
+          // ボタンや入力要素のクリックは除く
+          if (e.target.closest('button, input')) return;
+          selectedId=l.id; refreshLayerList(); syncMotionPanel(); syncGifFrameEditor();
+        };
         ui.layers.appendChild(item);
       }
     }
@@ -1418,24 +1420,21 @@
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
     ui.applyCanvas.onclick = () => {
-      const pre = captureState();
       const W = Math.max(1, parseInt(ui.canvasW.value)||1);
       const H = Math.max(1, parseInt(ui.canvasH.value)||1);
       stage.width = W; stage.height = H;
-      pushUndo(pre);
+      undoManager.recordState('キャンバスサイズ変更');
     };
     ui.fitToContent.onclick = () => {
-      const pre = captureState();
       fitCanvasToContent();
-      pushUndo(pre);
+      undoManager.recordState('内容にフィット');
     };
     ui.clearAll.onclick = () => {
         if(confirm("すべてのレイヤーを削除しますか？")){
-            const pre = captureState();
             layers = []; selectedId=null; refreshLayerList();
             syncGifFrameEditor();
             if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
-            pushUndo(pre);
+            undoManager.recordState('全レイヤー削除');
         }
     };
     ui.savePNG.onclick = () => {
@@ -2169,7 +2168,6 @@
     ui.applyMotion.onclick = ()=>{
       const l = layers.find(x=>x.id===selectedId);
       if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
-      const pre = captureState();
       const period = ui.motionPeriod ? parseFloat(ui.motionPeriod.value) : 0;
       l.motion = {
         type: ui.motionType.value,
@@ -2183,15 +2181,14 @@
       };
       refreshLayerList();
       syncMotionPanel();
-      pushUndo(pre);
+      undoManager.recordState('モーション適用');
     };
     ui.clearMotion.onclick = ()=>{
       const l = layers.find(x=>x.id===selectedId); if (!l || l.type!=='png') return;
-      const pre = captureState();
       l.motion = { type:'none', amp:10, speed:1.0, period:0, rot:0, anchorX:0.5, anchorY:0.5, axisDeg:0 };
       refreshLayerList();
       syncMotionPanel();
-      pushUndo(pre);
+      undoManager.recordState('モーション解除');
     };
     function drawChecker(c, w, h, s){
       c.save();
@@ -2345,6 +2342,7 @@
     let rotateState = null;
     const activePointers = new Map();
     let pinchState = null;
+    let initialLayerStateOnDrag = null; // Undo用
     function getCanvasXY(e) {
       const rect = stage.getBoundingClientRect();
       const scaleX = stage.width  / rect.width;
@@ -2411,7 +2409,7 @@
         const p1 = arr[0], p2 = arr[1];
         const l = layers.find(x => x.id === selectedId);
         if (l) {
-          history2.pre = captureState();
+          initialLayerStateOnDrag = JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v);
           const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
           const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
           pinchState = {
@@ -2430,28 +2428,24 @@
       let l = getSelectedLayer();
 
       if (lockEnabled) {
-          if (!l || !l.visible) {
-              return;
-          }
+          if (!l || !l.visible) return;
           const isOverHandle = isOverAnyHandle(l, p.x, p.y, handleRadiusFor(p.type));
-          if (!pointInLayer(l, p.x, p.y) && !isOverHandle) {
-              return;
-          }
+          if (!pointInLayer(l, p.x, p.y) && !isOverHandle) return;
       } else {
           const lTop = topLayerAt(p.x, p.y);
           if (lTop && lTop.id !== selectedId) {
-            const pre = captureState();
             selectedId = lTop.id;
             refreshLayerList();
             syncMotionPanel();
             syncGifFrameEditor();
-            pushUndo(pre);
           }
           l = getSelectedLayer();
       }
       
       if (!l || !l.visible) return;
       
+      initialLayerStateOnDrag = JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v);
+
       const cxh = l.x + l.w / 2, cyh = l.y + l.h / 2;
       const rad = (Number(l.rot) || 0) * Math.PI / 180;
       const r = handleRadiusFor(p.type);
@@ -2459,14 +2453,8 @@
       const near = (ax, ay, bx, by) => Math.hypot(ax-bx, ay-by) <= r;
       const pFlip = rotp(-l.w / 2 + 10, -l.h / 2 + 10);
       const pReset = rotp(l.w / 2 - 10, -l.h / 2 + 10);
-      if (near(p.x, p.y, pFlip.x, pFlip.y)) { 
-        const pre = captureState();
-        l.flipX = !l.flipX;
-        pushUndo(pre);
-        return; 
-      }
+      if (near(p.x, p.y, pFlip.x, pFlip.y)) { l.flipX = !l.flipX; undoManager.recordState('レイヤー反転'); return; }
       if (near(p.x, p.y, pReset.x, pReset.y)) {
-        const pre = captureState();
         const baseW = l.origW || l.w, baseH = l.origH || l.h;
         const r0 = baseW / baseH;
         const candA = { w: Math.max(1, Math.round(l.h * r0)), h: l.h };
@@ -2475,12 +2463,9 @@
         l.w = best.w; l.h = best.h;
         l.x = Math.round(cxh - l.w / 2);
         l.y = Math.round(cyh - l.h / 2);
-        pushUndo(pre);
+        undoManager.recordState('レイヤーリセット');
         return;
       }
-
-      history2.pre = captureState();
-
       const topMid = rotp(0, -l.h / 2), bottomMid = rotp(0, l.h / 2), leftMid = rotp(-l.w / 2, 0), rightMid = rotp(l.w / 2, 0);
       if (near(p.x, p.y, topMid.x, topMid.y)) { action = 'resize-edge'; resizeEdge = 'top'; }
       else if (near(p.x, p.y, bottomMid.x, bottomMid.y)) { action = 'resize-edge'; resizeEdge = 'bottom'; }
@@ -2500,8 +2485,6 @@
       } else if (pointInLayer(l, p.x, p.y)) {
         action = 'move';
         dragOffX = p.x - l.x; dragOffY = p.y - l.y;
-      } else {
-        history2.pre = null; // 何も操作対象がないので pre-state をクリア
       }
       if(action) stage.classList.add('dragging');
     }, { passive: false });
@@ -2565,29 +2548,65 @@
     }, { passive: false });
     const endPointerAction = (e) => {
         activePointers.delete(e.pointerId);
+
+        if (action && activePointers.size === 0) {
+            const l = getSelectedLayer();
+            const endState = l ? JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v) : null;
+            if (l && initialLayerStateOnDrag !== endState) {
+                let description = '';
+                switch(action) {
+                    case 'move': description = 'レイヤー移動'; break;
+                    case 'resize-edge':
+                    case 'scale': description = 'レイヤーサイズ変更'; break;
+                    case 'rotate': description = 'レイヤー回転'; break;
+                    case 'pinch': description = 'ピンチ操作'; break;
+                }
+                if (description) undoManager.recordState(description);
+            }
+        }
+        
         if (action === 'pinch' && activePointers.size < 2) {
             action = null; pinchState = null;
         }
         if (activePointers.size === 0) {
-            if (history2.pre) {
-              const sId = selectedId;
-              const before = history2.pre.layers.find(sl => sl.id === sId);
-              const after = layers.find(x => x.id === sId);
-              const changed = !before || !after ? true :
-                (before.x !== after.x || before.y !== after.y ||
-                 before.w !== after.w || before.h !== after.h ||
-                 before.rot !== after.rot || before.flipX !== after.flipX);
-              if (changed) pushUndo(history2.pre);
-              history2.pre = null;
-            }
-            action = null; resizeEdge = null; startRect = null; scaleState = null; rotateState = null; pinchState = null;
+            action = null; resizeEdge = null; startRect = null; scaleState = null; rotateState = null; pinchState = null; initialLayerStateOnDrag = null;
             stage.classList.remove('dragging');
         }
         try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
     };
     window.addEventListener('pointerup', endPointerAction);
     window.addEventListener('pointercancel', endPointerAction);
+    
+    let moveDebounceTimer;
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        undoManager.undo();
+        return;
+      }
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')) {
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        undoManager.redo();
+        return;
+      }
 
+      const l = layers.find(x => x.id===selectedId); if (!l) return;
+      let d = 1;
+      if (e.shiftKey) d = 10;
+      if (e.ctrlKey || e.metaKey) d = 50;
+      let moved = false;
+      if (e.key==='ArrowLeft')  { const s=snapRect(l.x-d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
+      if (e.key==='ArrowRight') { const s=snapRect(l.x+d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
+      if (e.key==='ArrowUp')    { const s=snapRect(l.x, l.y-d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
+      if (e.key==='ArrowDown')  { const s=snapRect(l.x, l.y+d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
+      
+      if (moved) {
+        clearTimeout(moveDebounceTimer);
+        moveDebounceTimer = setTimeout(() => undoManager.recordState('キーボード移動'), 400);
+      }
+    });
     (function setupDoubleTapBlock() {
       const SELECTORS = 'button, .btn, .footer-btn, .header-button, label, .add-file-label, summary, [role="button"]';
       let lastTouchEnd = 0;
@@ -2827,7 +2846,7 @@
       if (!layer || layer.type !== 'gif') return;
       saveGifUndoState(layer);
       const result = mutate();
-      if (result === false) { 
+      if (result === false) {
         const history = gifUndoHistory.get(layer.id);
         if (history) history.pop();
         return;
@@ -2854,7 +2873,7 @@
       withGifUndo(l, () => {
         if (l.gif.frames.length <= 1) {
           alert('最後のフレームは削除できません');
-          return false; // 中断
+          return false;
         }
         l.gif.frames.splice(gifFEState.idx, 1);
         gifFEState.idx = Math.max(0, gifFEState.idx-1);
@@ -2905,7 +2924,7 @@
           bmp.close?.();
         } catch(err){ 
             alert('画像の読み込みに失敗: '+err.message);
-            return false; // 中断
+            return false;
         }
       });
       e.target.value = '';
@@ -3093,6 +3112,11 @@
         stampPngOntoGifFrame(gifLayer, pngLayer, frame.canvas, mode, clearBefore);
       });
     });
+
+    // 初期状態を記録
+    setTimeout(() => {
+      undoManager.recordState('初期状態');
+    }, 100);
 
   })();
   </script>
