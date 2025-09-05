@@ -485,6 +485,7 @@
             <header class="app-header">
                 <div class="header-group left">
                     <button id="goto-left-panel-btn" class="header-button" aria-label="左パネルへ">☰</button>
+                    <!-- Undo/RedoボタンはJSでここに追加されます -->
                 </div>
                 <h1>レイヤーエディタ</h1>
                 <div class="header-group right">
@@ -970,26 +971,86 @@
     let layers = [];
     let selectedId = null;
 
-    // === グローバルUndoシステムの追加 ===
+    // === 画像リソース管理システム ===
+    const resourceManager = {
+      pngResources: new Map(), // id -> {img, originalUrl}
+      gifResources: new Map(), // id -> {frames, cumul, duration}
+      
+      savePngResource(layerId, pngData) {
+        this.pngResources.set(layerId, {
+          img: pngData.img,
+          originalUrl: pngData.originalUrl
+        });
+      },
+      
+      saveGifResource(layerId, gifData) {
+        this.gifResources.set(layerId, {
+          frames: gifData.frames,
+          cumul: gifData.cumul,
+          duration: gifData.duration
+        });
+      },
+      
+      getPngResource(layerId) {
+        return this.pngResources.get(layerId);
+      },
+      
+      getGifResource(layerId) {
+        return this.gifResources.get(layerId);
+      },
+      
+      cleanup() {
+        const currentLayerIds = new Set(layers.map(l => l.id));
+        
+        for (const [id] of this.pngResources) {
+          if (!currentLayerIds.has(id)) {
+            const resource = this.pngResources.get(id);
+            if (resource?.originalUrl) {
+              URL.revokeObjectURL(resource.originalUrl);
+            }
+            this.pngResources.delete(id);
+          }
+        }
+        
+        for (const [id] of this.gifResources) {
+          if (!currentLayerIds.has(id)) {
+            this.gifResources.delete(id);
+          }
+        }
+      }
+    };
+
+    // === 改良版UndoManager ===
     const undoManager = {
       history: [],
       currentIndex: -1,
       maxHistory: 50,
-      isExecutingUndo: false, // Undo/Redo実行中フラグ
+      isExecutingUndo: false,
       
       recordState(description = '') {
         if (this.isExecutingUndo) return;
         this.history = this.history.slice(0, this.currentIndex + 1);
         
-        // 現在の状態をディープコピーして保存
+        const layerStates = layers.map(l => {
+            const state = { ...l };
+            delete state.png;
+            delete state.gif;
+            
+            if (l.type === 'png' && l.png) {
+                resourceManager.savePngResource(l.id, l.png);
+                state.hasPngResource = true;
+            } else if (l.type === 'gif' && l.gif) {
+                resourceManager.saveGifResource(l.id, l.gif);
+                state.hasGifResource = true;
+            }
+            
+            return state;
+        });
+
         const state = {
           timestamp: Date.now(),
           description,
-          // JSON.stringifyは関数やDOM要素を保存できないため、シリアライズ可能なデータのみを対象
-          layers: JSON.parse(JSON.stringify(layers, (key, value) => {
-            if (key === 'png' || key === 'gif') return undefined; // 画像データは除外
-            return value;
-          })),
+          layers: JSON.parse(JSON.stringify(layerStates)),
           selectedId,
           canvasWidth: stage.width,
           canvasHeight: stage.height
@@ -1029,23 +1090,31 @@
       },
       
       restoreState(state) {
-        // 保存された状態からレイヤーを復元
-        const newLayers = state.layers.map(savedLayer => {
-          const currentLayer = layers.find(l => l.id === savedLayer.id);
-          // 画像データ(png.img, gif.frames)は現在の参照を維持
-          if (currentLayer) {
-            return {
-              ...savedLayer,
-              png: currentLayer.png,
-              gif: currentLayer.gif
-            };
+        layers = state.layers.map(savedLayer => {
+          const restoredLayer = { ...savedLayer };
+          
+          if (savedLayer.hasPngResource) {
+            restoredLayer.png = resourceManager.getPngResource(savedLayer.id);
+            if (!restoredLayer.png) {
+              console.warn(`PNG resource not found for layer ${savedLayer.id}`);
+              return null;
+            }
+          } else if (savedLayer.hasGifResource) {
+            restoredLayer.gif = resourceManager.getGifResource(savedLayer.id);
+             if (!restoredLayer.gif) {
+              console.warn(`GIF resource not found for layer ${savedLayer.id}`);
+              return null;
+            }
           }
-          // レイヤーが削除されて履歴から復活する場合など
-          return savedLayer;
-        });
+          
+          return restoredLayer;
+        }).filter(l => l !== null);
         
-        layers = newLayers;
-        selectedId = state.selectedId;
+        if (state.selectedId && layers.find(l => l.id === state.selectedId)) {
+          selectedId = state.selectedId;
+        } else {
+          selectedId = layers.length > 0 ? layers[layers.length - 1].id : null;
+        }
         
         if (state.canvasWidth && state.canvasHeight) {
           stage.width = state.canvasWidth;
@@ -1057,6 +1126,9 @@
         refreshLayerList();
         syncMotionPanel();
         syncGifFrameEditor();
+        rebuildPngLayerOptions();
+        if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
+        resourceManager.cleanup();
       },
       
       updateUI() {
@@ -1077,11 +1149,17 @@
             redoBtn.id = 'globalRedo';
             redoBtn.className = 'header-button';
             redoBtn.innerHTML = '↷';
-            redoBtn.title = 'やり直す (Ctrl+Y)';
+            redoBtn.title = 'やり直す (Ctrl+Y / Ctrl+Shift+Z)';
             redoBtn.onclick = () => this.redo();
             
-            leftGroup.appendChild(undoBtn);
-            leftGroup.appendChild(redoBtn);
+            const panelBtn = leftGroup.querySelector('#goto-left-panel-btn');
+            if (panelBtn) {
+                panelBtn.after(redoBtn);
+                panelBtn.after(undoBtn);
+            } else {
+                leftGroup.appendChild(undoBtn);
+                leftGroup.appendChild(redoBtn);
+            }
           }
         }
         
@@ -1173,9 +1251,9 @@
       gifFEPanelEdit1: document.getElementById('gifFEPanelEdit1'),
       gifFEPanelEdit2: document.getElementById('gifFEPanelEdit2'),
     };
-    const gifFEState = { idx: 0 }; // 現在のフレームインデックス
-    const gifUndoHistory = new Map(); // GIFレイヤーごとのUndo履歴
-    const UNDO_HISTORY_MAX = 20;    // 履歴の最大保存件数
+    const gifFEState = { idx: 0 };
+    const gifUndoHistory = new Map();
+    const UNDO_HISTORY_MAX = 20;
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
     
@@ -1222,8 +1300,8 @@
     });
 
     function summarizeGifLayers() {
-      let maxDur = 0;            // ms
-      let minDelay = Infinity;   // ms
+      let maxDur = 0;
+      let minDelay = Infinity;
       let maxFrames = 0;
       for (const l of layers) {
         if (!l.visible || l.type !== 'gif') continue;
@@ -1237,7 +1315,7 @@
           }
         }
       }
-      if (!isFinite(minDelay)) minDelay = 50; // default to 20fps
+      if (!isFinite(minDelay)) minDelay = 50;
       const fpsMax = Math.max(1, Math.min(60, Math.round(1000 / Math.max(10, minDelay))));
       return { maxDur, minDelay, fpsMax, maxFrames };
     }
@@ -1258,11 +1336,8 @@
       if (ui.autoFromGifs.checked) recalcAutoFromGifs();
     });
 
-    const layerAssets = new Map(); // 画像データを永続的に保持
-
     function addLayer(layer){
       layers.push(layer);
-      layerAssets.set(layer.id, { png: layer.png, gif: layer.gif });
       selectedId = layer.id;
       refreshLayerList();
       syncGifFrameEditor();
@@ -1283,6 +1358,7 @@
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
       undoManager.recordState('レイヤー削除: ' + layerName);
+      resourceManager.cleanup();
     }
     function moveLayer(id, dir){
       const idx = layers.findIndex(l => l.id === id);
@@ -1298,6 +1374,7 @@
       ui.layers.innerHTML = '';
       for (let i = layers.length - 1; i >= 0; i--) {
         const l = layers[i];
+        if (!l) continue; // 復元中のnullをスキップ
         const item = document.createElement('div');
         item.className = 'layer-item';
         item.dataset.id = l.id;
@@ -1334,7 +1411,6 @@
         op.append('不透明度', range);
         item.append(head, pos, op);
         item.onclick = (e)=>{
-          // ボタンや入力要素のクリックは除く
           if (e.target.closest('button, input')) return;
           selectedId=l.id; refreshLayerList(); syncMotionPanel(); syncGifFrameEditor();
         };
@@ -1379,7 +1455,10 @@
       const img = new Image();
       img.src = url;
       await img.decode();
-      addLayer({ id:crypto.randomUUID(), type:'png', name, visible:true, opacity:1, x:0, y:0, w:img.naturalWidth, h:img.naturalHeight, origW: img.naturalWidth, origH: img.naturalHeight, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, png:{ img, originalUrl: url } });
+      const layerId = crypto.randomUUID();
+      const pngData = { img, originalUrl: url };
+      resourceManager.savePngResource(layerId, pngData);
+      addLayer({ id: layerId, type:'png', name, visible:true, opacity:1, x:0, y:0, w:img.naturalWidth, h:img.naturalHeight, origW: img.naturalWidth, origH: img.naturalHeight, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, png: pngData });
     }
     async function loadGifLayer(name, buf){
       const reader = new GifReader(new Uint8Array(buf));
@@ -1416,7 +1495,10 @@
         }
       }
       const cumul = []; let acc=0; for (const f of frames){ cumul.push(acc); acc+=f.delay; }
-      addLayer({ id:crypto.randomUUID(), type:'gif', name, visible:true, opacity:1, x:0, y:0, w:W, h:H, origW: W, origH: H, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, gif:{ frames, cumul, duration } });
+      const layerId = crypto.randomUUID();
+      const gifData = { frames, cumul, duration };
+      resourceManager.saveGifResource(layerId, gifData);
+      addLayer({ id: layerId, type:'gif', name, visible:true, opacity:1, x:0, y:0, w:W, h:H, origW: W, origH: H, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, gif: gifData });
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
     ui.applyCanvas.onclick = () => {
@@ -2342,7 +2424,7 @@
     let rotateState = null;
     const activePointers = new Map();
     let pinchState = null;
-    let initialLayerStateOnDrag = null; // Undo用
+    let initialLayerStateOnDrag = null;
     function getCanvasXY(e) {
       const rect = stage.getBoundingClientRect();
       const scaleX = stage.width  / rect.width;
@@ -2548,7 +2630,7 @@
     }, { passive: false });
     const endPointerAction = (e) => {
         activePointers.delete(e.pointerId);
-
+        
         if (action && activePointers.size === 0) {
             const l = getSelectedLayer();
             const endState = l ? JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v) : null;
@@ -2765,7 +2847,7 @@
           withGifUndo(layer, () => {
             if (layer.gif.frames.length <= 1) {
               alert('最後のフレームは削除できません');
-              return false; // 中断
+              return false;
             }
             layer.gif.frames.splice(i, 1);
             if (gifFEState.idx >= layer.gif.frames.length) {
