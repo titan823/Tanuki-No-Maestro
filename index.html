@@ -379,6 +379,10 @@
       color:#eee; font-size:11px; padding:1px 4px; border-radius:4px;
     }
     .gif-fe__thumb.selected { outline:2px solid var(--accent); }
+    .gif-fe__thumb.duplicated {
+      outline: 2px dashed #ff9800;
+      outline-offset: -4px;
+    }
     .gif-fe__tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -537,7 +541,6 @@
                         </label>
                         <button id="gifFEDelayApplyAll" class="btn small" title="全フレームに同じ遅延を適用">全適用</button>
                       </div>
-                      <div class="muted small extra-small" style="text-align: right; margin-bottom: 8px;">（10ms刻み推奨）</div>
                       <div id="gifFEThumbs" class="gif-fe__thumbs"></div>
                     </div>
                     <!-- フレーム編集パネル (画像操作) -->
@@ -2937,7 +2940,7 @@
       if (!layer || layer.type !== 'gif') return;
       
       const framesClone = layer.gif.frames.map(f => ({
-          delay: f.delay,
+          ...f, // isDuplicateを含む全プロパティをコピー
           canvas: (() => {
               const c = document.createElement('canvas');
               c.width = f.canvas.width;
@@ -2966,6 +2969,9 @@
         const fr = layer.gif.frames[i];
         const slot = document.createElement('div');
         slot.className = 'gif-fe__thumb' + (i===gifFEState.idx ? ' selected' : '');
+        if (fr.isDuplicate) {
+            slot.classList.add('duplicated');
+        }
         const cnv = document.createElement('canvas');
 
         const tw = 78, th = 78;
@@ -3069,7 +3075,7 @@
         const dup = document.createElement('canvas');
         dup.width = src.canvas.width; dup.height = src.canvas.height;
         dup.getContext('2d').drawImage(src.canvas, 0, 0);
-        l.gif.frames.splice(i+1, 0, { canvas: dup, delay: src.delay|0 });
+        l.gif.frames.splice(i+1, 0, { canvas: dup, delay: src.delay|0, isDuplicate: true });
         gifFEState.idx = i+1;
       });
     });
