@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1785,16 +1786,55 @@
             undoManager.recordState('全レイヤー削除');
         }
     };
+    
+    // [修正] PNG保存機能
     ui.savePNG.onclick = () => {
+      // 編集済みPNGレイヤーの変更を反映
+      let pendingPngUpdate = false;
+      for (const layer of layers) {
+        if (layer.type === 'png' && layer.visible) {
+          const res = resourceManager.pngResources.get(layer.id);
+          if (res && res.canvas && res.dirty) {
+            pendingPngUpdate = true;
+            // 編集済みキャンバスを元画像として更新
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = res.canvas.width;
+            tempCanvas.height = res.canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(res.canvas, 0, 0);
+            
+            // 新しいImage要素を作成
+            const newImg = new Image();
+            newImg.onload = () => {
+              res.img = newImg;
+              // 実際の合成と保存を実行
+              renderCompositeForSave();
+            };
+            newImg.src = tempCanvas.toDataURL('image/png');
+            return; // 非同期処理のため一旦return
+          }
+        }
+      }
+      
+      // 編集済みPNGがない場合は直接保存
+      if (!pendingPngUpdate) {
+        renderCompositeForSave();
+      }
+    };
+    
+    // [修正] 実際の合成・保存処理を分離
+    function renderCompositeForSave() {
       renderComposite(Date.now());
-      stage.toBlob((blob)=>{
+      stage.toBlob((blob) => {
         if (!blob) return;
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'composited.png'; a.click();
+        a.download = 'composited.png';
+        a.click();
         URL.revokeObjectURL(a.href);
       }, 'image/png');
-    };
+    }
+
     if (document.getElementById('pngOptimizeSection')) {
       document.getElementById('optimizePNG').onclick = async () => {
         try {
@@ -2121,7 +2161,8 @@
         targetCtx.globalAlpha = l.opacity;
         if (l.type === 'png') {
           const res = resourceManager.pngResources.get(l.id);
-          const source = res?.canvas ?? l.png?.img;
+          // [修正] 編集済みキャンバスがあればそれを優先、なければ元画像を使用
+          const source = (res?.canvas && res?.dirty) ? res.canvas : (res?.canvas ?? l.png?.img);
           if (!source) { targetCtx.restore(); continue; }
           
           const m = (applyMotion && l.motion) ? l.motion : null;
@@ -2152,7 +2193,9 @@
       }
     }
     function applyMotionDraw(ctx, l, t){
-      const source = resourceManager.pngResources.get(l.id)?.canvas ?? l.png.img;
+      // [修正] 編集済みキャンバスがあればそれを優先
+      const res = resourceManager.pngResources.get(l.id);
+      const source = (res?.canvas && res?.dirty) ? res.canvas : (res?.canvas ?? l.png.img);
       const m = l.motion || { type:'none' };
       const amp = Number(m.amp)||0;
       const hz = (m.period && m.period>0) ? (1/Math.max(0.01, m.period)) : Math.max(0.001, Number(m.speed)||1.0);
@@ -3527,6 +3570,18 @@
           } else {
               ui.paintTargetInfo.textContent = `対象: PNG (原寸 ${tgt.canvas.width}×${tgt.canvas.height})`;
           }
+
+          // [修正] 視覚フィードバックの追加
+          if (tgt && tgt.kind === 'png') {
+            const res = resourceManager.pngResources.get(tgt.layer.id);
+            if (res && res.dirty) {
+              ui.paintTargetInfo.style.color = '#ff9800'; // 編集中の色
+              ui.paintTargetInfo.textContent += ' ●編集中';
+            } else {
+              ui.paintTargetInfo.style.color = '';
+            }
+          }
+
           drawPaintView(tgt.canvas);
           updatePaintUndoUI(tgt);
       }
@@ -3587,52 +3642,137 @@
           const mode = ui.paintFillMode.value;
           floodFill(tgt.canvas, x, y, { ...color, a: 255 }, tol, mode);
         },
+        // [修正] 消しゴムツールの改善
         eraser: (tgt, x, y, lastX, lastY) => {
           const r = parseInt(ui.paintEraserRadius.value) || 10;
           const ctx = tgt.canvas.getContext('2d');
           ctx.save();
           ctx.globalCompositeOperation = 'destination-out';
-          ctx.fillStyle = '#000';
           
-          const dist = Math.hypot(x-lastX, y-lastY);
-          const angle = Math.atan2(y-lastY, x-lastX);
-          for (let i = 0; i < dist; i+= r/2) {
-              const px = lastX + Math.cos(angle) * i;
-              const py = lastY + Math.sin(angle) * i;
+          if (paintState.isPointerDown && lastX !== undefined && lastY !== undefined) {
+            // 線を引く場合の補間処理
+            const dist = Math.hypot(x - lastX, y - lastY);
+            const steps = Math.max(1, Math.ceil(dist / (r * 0.3))); // より細かい補間
+            
+            for (let i = 0; i <= steps; i++) {
+              const t = i / steps;
+              const px = lastX + (x - lastX) * t;
+              const py = lastY + (y - lastY) * t;
               ctx.beginPath();
               ctx.arc(px, py, r, 0, Math.PI * 2);
               ctx.fill();
+            }
+          } else {
+            // 単発クリックの場合
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
           }
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
           
           ctx.restore();
         },
+        // [修正] ぼかしツールの完全書き直し
         blur: (tgt, x, y) => {
             const r = parseInt(ui.paintBlurRadius.value) || 5;
             const passes = parseInt(ui.paintBlurPasses.value) || 1;
             const ctx = tgt.canvas.getContext('2d');
-            const tmpCanvas = document.createElement('canvas');
-            tmpCanvas.width = tgt.canvas.width;
-            tmpCanvas.height = tgt.canvas.height;
-            const tmpCtx = tmpCanvas.getContext('2d');
+            const { width, height } = tgt.canvas;
             
-            for(let i=0; i<passes; i++){
-                tmpCtx.clearRect(0,0,tmpCanvas.width, tmpCanvas.height);
-                tmpCtx.drawImage(tgt.canvas, 0, 0);
-
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI*2);
-                ctx.clip();
-                ctx.filter = `blur(${r/3}px)`;
-                ctx.drawImage(tmpCanvas, 0, 0);
-                ctx.filter = 'none';
-                ctx.restore();
+            // ぼかし処理用の一時キャンバス
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 現在の画像をコピー
+            tempCtx.drawImage(tgt.canvas, 0, 0);
+            
+            // ぼかし範囲のImageDataを取得
+            const blurRadius = Math.max(1, r);
+            const x1 = Math.max(0, x - blurRadius);
+            const y1 = Math.max(0, y - blurRadius);
+            const x2 = Math.min(width, x + blurRadius);
+            const y2 = Math.min(height, y + blurRadius);
+            const w = x2 - x1;
+            const h = y2 - y1;
+            
+            if (w <= 0 || h <= 0) return;
+            
+            const imageData = tempCtx.getImageData(x1, y1, w, h);
+            
+            // ガウシアンブラーを手動実装
+            for (let pass = 0; pass < passes; pass++) {
+              applyGaussianBlur(imageData, Math.max(1, blurRadius / 2));
             }
+            
+            // 円形マスクを適用してぼかし結果を合成
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, blurRadius, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.putImageData(imageData, x1, y1);
+            ctx.restore();
         },
       };
+      
+      // [追加] ガウシアンブラー関数の追加
+      function applyGaussianBlur(imageData, radius) {
+        const { data, width, height } = imageData;
+        const tempData = new Uint8ClampedArray(data);
+        
+        // 水平方向のブラー
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            let r = 0, g = 0, b = 0, a = 0, totalWeight = 0;
+            
+            for (let dx = -radius; dx <= radius; dx++) {
+              const nx = x + dx;
+              if (nx >= 0 && nx < width) {
+                const weight = Math.exp(-(dx * dx) / (2 * radius * radius));
+                const nIdx = (y * width + nx) * 4;
+                r += tempData[nIdx] * weight;
+                g += tempData[nIdx + 1] * weight;
+                b += tempData[nIdx + 2] * weight;
+                a += tempData[nIdx + 3] * weight;
+                totalWeight += weight;
+              }
+            }
+            
+            data[idx] = r / totalWeight;
+            data[idx + 1] = g / totalWeight;
+            data[idx + 2] = b / totalWeight;
+            data[idx + 3] = a / totalWeight;
+          }
+        }
+        
+        // 垂直方向のブラー
+        tempData.set(data);
+        for (let x = 0; x < width; x++) {
+          for (let y = 0; y < height; y++) {
+            const idx = (y * width + x) * 4;
+            let r = 0, g = 0, b = 0, a = 0, totalWeight = 0;
+            
+            for (let dy = -radius; dy <= radius; dy++) {
+              const ny = y + dy;
+              if (ny >= 0 && ny < height) {
+                const weight = Math.exp(-(dy * dy) / (2 * radius * radius));
+                const nIdx = (ny * width + x) * 4;
+                r += tempData[nIdx] * weight;
+                g += tempData[nIdx + 1] * weight;
+                b += tempData[nIdx + 2] * weight;
+                a += tempData[nIdx + 3] * weight;
+                totalWeight += weight;
+              }
+            }
+            
+            data[idx] = r / totalWeight;
+            data[idx + 1] = g / totalWeight;
+            data[idx + 2] = b / totalWeight;
+            data[idx + 3] = a / totalWeight;
+          }
+        }
+      }
 
       const handlePaintAction = (e, isMove = false) => {
           if (!paintState.isPointerDown && !isMove) return;
@@ -3833,3 +3973,4 @@
   </script>
 </body>
 </html>
+
