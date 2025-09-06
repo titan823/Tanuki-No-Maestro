@@ -431,6 +431,16 @@
       background-color: rgba(255, 255, 255, 0.1);
       border-radius: 4px;
     }
+    /* === 追加: 複数選択のスタイル === */
+    .layer-item.multi-selected {
+      background-color: #1a2533; /* 落ち着いた青 */
+      border-color: #38587a;
+    }
+    .layer-item.primary-selected {
+      outline: 2px solid var(--accent); /* プライマリ選択は今まで通り */
+      outline-offset: -2px;
+      border-color: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -450,7 +460,7 @@
                             選択レイヤーのみ操作
                         </label>
                     </div>
-                    <div class="muted" style="margin-top:6px">上ほど前面。クリックで選択、キャンバス上でドラッグ移動。</div>
+                    <div class="muted" style="margin-top:6px">上ほど前面。クリックで選択、<kbd>Ctrl</kbd>/<kbd>Shift</kbd>+クリックで複数選択。キャンバス上でドラッグ移動。</div>
                 </div>
                 <div class="section">
                     <details open>
@@ -938,7 +948,8 @@
             screens.settings.style.transform = 'translateX(200%)';
             screens.leftPanel.classList.add('active');
             setTimeout(() => {
-                const el = ui.layers?.querySelector(`[data-id="${selectedId}"]`);
+                const primarySelectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
+                const el = ui.layers?.querySelector(`[data-id="${primarySelectedId}"]`);
                 el?.scrollIntoView({ block: 'nearest' });
             }, 0);
         } else if (screenName === 'settings') {
@@ -967,7 +978,8 @@
       f();
     })();
     let layers = [];
-    let selectedId = null;
+    let selectedIds = [];
+    let lastSelectedId = null;
 
     // === 改良版リソース管理システム ===
     const resourceManager = {
@@ -1037,7 +1049,7 @@
           if (resource.refCount <= 0) {
             if (resource.originalUrl) {
               URL.revokeObjectURL(resource.originalUrl);
-            }
+                        }
             this.pngResources.delete(layerId);
           }
         } else if (type === 'gif' && this.gifResources.has(layerId)) {
@@ -1086,7 +1098,7 @@
           timestamp: Date.now(),
           description,
           layers: JSON.parse(JSON.stringify(layerStates)),
-          selectedId,
+          selectedIds: [...selectedIds],
           canvasWidth: stage.width,
           canvasHeight: stage.height
         };
@@ -1186,22 +1198,18 @@
           return restoredLayer;
         }).filter(l => l !== null);
         
-        if (state.selectedId && layers.find(l => l.id === state.selectedId)) {
-          selectedId = state.selectedId;
-        } else {
-          selectedId = layers.length > 0 ? layers[layers.length - 1].id : null;
-        }
-        
+        selectedIds = state.selectedIds.filter(id => layers.some(l => l.id === id));
+        lastSelectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
+
         if (state.canvasWidth && state.canvasHeight) {
           stage.width = state.canvasWidth;
           stage.height = state.canvasHeight;
           ui.canvasW.value = String(state.canvasWidth);
-                    ui.canvasH.value = String(state.canvasHeight);
+          ui.canvasH.value = String(state.canvasHeight);
         }
         
         refreshLayerList();
-        syncMotionPanel();
-        syncGifFrameEditor();
+        syncPanelsForSelection();
         rebuildPngLayerOptions();
         if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
       },
@@ -1311,7 +1319,7 @@
       pngOptUltra:  $('#pngOptUltra', settingsScreen),
       applyMergeInPreview: $('#applyMergeInPreview', settingsScreen),
       saveOriginalPNG: $('#saveOriginalPNG', settingsScreen),
-      updateAppBtn: $('#update-app-btn', settingsScreen),
+            updateAppBtn: $('#update-app-btn', settingsScreen),
       autoFromGifs: $('#autoFromGifs', settingsScreen),
       encodeProgress: $('#encodeProgress', editorScreen),
       encodeProgressText: $('#encodeProgressText', editorScreen),
@@ -1431,7 +1439,8 @@
       const currentState = layers.map(l => l.id);
       
       layers.push(layer);
-      selectedId = layer.id;
+      selectedIds = [layer.id];
+      lastSelectedId = layer.id;
       
       const nextState = layers.map(l => l.id);
       
@@ -1445,7 +1454,7 @@
       }
       
       refreshLayerList();
-      syncGifFrameEditor();
+      syncPanelsForSelection();
       rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
@@ -1454,23 +1463,26 @@
       undoManager.recordState('レイヤー追加: ' + layer.name);
     }
     function removeLayer(id){
-      const layer = layers.find(l => l.id === id);
-      const layerName = layer ? layer.name : '';
+      const idsToRemove = selectedIds.includes(id) ? [...selectedIds] : [id];
+      const removedNames = [];
       
-      gifUndoHistory.delete(id);
-      layers = layers.filter(l => l.id !== id);
-      
-      if (selectedId === id) {
-        selectedId = layers.length ? layers[layers.length-1].id : null;
-      }
+      idsToRemove.forEach(removeId => {
+        const layer = layers.find(l => l.id === removeId);
+        if (layer) removedNames.push(layer.name);
+        gifUndoHistory.delete(removeId);
+        layers = layers.filter(l => l.id !== removeId);
+      });
+
+      selectedIds = [];
+      lastSelectedId = null;
       
       refreshLayerList();
-      syncGifFrameEditor();
+      syncPanelsForSelection();
       rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
       
-      undoManager.recordState('レイヤー削除: ' + layerName);
+      undoManager.recordState(`${idsToRemove.length}個のレイヤーを削除: ${removedNames.slice(0,2).join(', ')}...`);
     }
     function moveLayer(id, dir){
       const idx = layers.findIndex(l => l.id === id);
@@ -1483,46 +1495,91 @@
       undoManager.recordState('レイヤー順序変更');
     }
     function duplicateLayer(id) {
-      const originalLayer = layers.find(l => l.id === id);
-      if (!originalLayer) return;
+      const idsToDuplicate = selectedIds.includes(id) ? [...selectedIds] : [id];
+      const newSelectedIds = [];
+      
+      const originalIndexMap = new Map();
+      layers.forEach((l, i) => originalIndexMap.set(l.id, i));
+      
+      const sortedToDuplicate = idsToDuplicate
+        .map(id => ({ id, index: originalIndexMap.get(id) }))
+        .sort((a, b) => a.index - b.index);
 
-      const newLayer = { ...originalLayer }; // 既存のプロパティをコピー
+      sortedToDuplicate.forEach(({ id }) => {
+          const originalLayer = layers.find(l => l.id === id);
+          if (!originalLayer) return;
 
-      // 新しいレイヤーにユニークな値を設定
-      newLayer.id = crypto.randomUUID();
-      newLayer.name = originalLayer.name + ' のコピー';
-      // 見分けがつくように少しずらす
-      newLayer.x = originalLayer.x + 10;
-      newLayer.y = originalLayer.y + 10;
+          const newLayer = JSON.parse(JSON.stringify(originalLayer, (k,v) => (k==='png'||k==='gif')?undefined:v));
+          newLayer.id = crypto.randomUUID();
+          newLayer.name = originalLayer.name + ' のコピー';
+          newLayer.x = originalLayer.x + 10;
+          newLayer.y = originalLayer.y + 10;
 
-      // 画像/GIFリソースの参照カウントを増やす
-      resourceManager.addReference(originalLayer.id, originalLayer.type);
-
-      // 元のレイヤーのすぐ上に新しいレイヤーを挿入
-      const originalIndex = layers.findIndex(l => l.id === id);
-      if (originalIndex > -1) {
-        layers.splice(originalIndex + 1, 0, newLayer);
-      } else {
-        layers.push(newLayer); // 念のためフォールバック
+          if (originalLayer.type === 'png') {
+              newLayer.png = resourceManager.getPngResource(originalLayer.id);
+              resourceManager.savePngResource(newLayer.id, newLayer.png);
+          } else if (originalLayer.type === 'gif') {
+              newLayer.gif = resourceManager.getGifResource(originalLayer.id);
+              resourceManager.saveGifResource(newLayer.id, newLayer.gif);
+          }
+          
+          const originalIndex = layers.findIndex(l => l.id === id);
+          layers.splice(originalIndex + 1, 0, newLayer);
+          newSelectedIds.push(newLayer.id);
+      });
+      
+      if (newSelectedIds.length > 0) {
+        selectedIds = newSelectedIds;
+        lastSelectedId = newSelectedIds[newSelectedIds.length - 1];
+        refreshLayerList();
+        syncPanelsForSelection();
+        if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
+        undoManager.recordState(`${idsToDuplicate.length}個のレイヤーを複製`);
       }
-
-      // アプリケーションの状態を更新
-      selectedId = newLayer.id;
-      refreshLayerList();
-      syncGifFrameEditor();
-      syncMotionPanel();
-      if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
-      undoManager.recordState('レイヤー複製: ' + newLayer.name);
     }
+    
+    function syncPanelsForSelection() {
+        const primarySelectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
+        const l = layers.find(x => x.id === primarySelectedId);
+        
+        if (selectedIds.length === 1 && l) {
+            syncMotionPanel();
+            syncGifFrameEditor();
+        } else {
+            // 複数選択 or 未選択
+            ui.motionType.parentElement.parentElement.parentElement.hidden = true; // detailsタグを隠す
+            ui.gifFrameEditor.hidden = true;
+        }
+
+        if (selectedIds.length > 0) {
+            ui.motionType.parentElement.parentElement.parentElement.hidden = false;
+            const allPng = selectedIds.every(id => layers.find(l=>l.id===id)?.type === 'png');
+            ui.applyMotion.disabled = !allPng;
+            ui.clearMotion.disabled = !allPng;
+            // モーションパネルの他のUIも同様に制御
+            $$('#left-panel-screen .section details:not(:first-child) :is(input, select, button)', leftPanelScreen)
+              .forEach(el => el.disabled = !allPng);
+
+        } else {
+            syncMotionPanel();
+            syncGifFrameEditor();
+        }
+    }
+
     function refreshLayerList(){
       ui.layers.innerHTML = '';
+      const primarySelectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
+
       for (let i = layers.length - 1; i >= 0; i--) {
         const l = layers[i];
         if (!l) continue;
         const item = document.createElement('div');
         item.className = 'layer-item';
         item.dataset.id = l.id;
-        if (l.id === selectedId) item.style.outline = '2px solid #3b8c3f';
+        if (selectedIds.includes(l.id)) {
+            item.classList.add(l.id === primarySelectedId ? 'primary-selected' : 'multi-selected');
+        }
+        
         const head = document.createElement('div');
         head.className = 'layer-head';
         const title = document.createElement('div');
@@ -1532,7 +1589,12 @@
         controls.className = 'controls';
         const vis = document.createElement('input'); vis.type='checkbox'; vis.checked = l.visible; vis.title='表示/非表示';
         vis.addEventListener('change', ()=>{
-           l.visible = vis.checked;
+           const isChecked = vis.checked;
+           const targetIds = selectedIds.includes(l.id) ? selectedIds : [l.id];
+           targetIds.forEach(id => {
+               const layer = layers.find(la => la.id === id);
+               if (layer) layer.visible = isChecked;
+           });
            if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
            undoManager.recordState('レイヤー表示切替');
         });
@@ -1547,35 +1609,93 @@
         controls.append(vis, up, down, dup, del);
         head.append(title, controls);
         const pos = document.createElement('div'); pos.className='row small';
-        const posx = document.createElement('input'); posx.type='number'; posx.value=l.x;
-        const posy = document.createElement('input'); posy.type='number'; posy.value=l.y;
-        posx.onchange=()=>{ l.x = parseInt(posx.value)||0; undoManager.recordState('レイヤー位置変更'); };
-        posy.onchange=()=>{ l.y = parseInt(posy.value)||0; undoManager.recordState('レイヤー位置変更'); };
-        pos.append('X', posx, 'Y', posy);
+        const posx = document.createElement('input'); posx.type='number'; 
+        const posy = document.createElement('input'); posy.type='number'; 
+        
         const op = document.createElement('div'); op.className='row small';
-        const range = document.createElement('input'); range.type='range'; range.min='0'; range.max='1'; range.step='0.01'; range.value=String(l.opacity);
+        const range = document.createElement('input'); range.type='range'; range.min='0'; range.max='1'; range.step='0.01';
         range.className='opacity';
-        range.oninput=()=>{ l.opacity = parseFloat(range.value); };
+        
+        const selectedLayers = selectedIds.map(id => layers.find(la => la.id === id)).filter(Boolean);
+        
+        if (selectedLayers.length > 1 && selectedIds.includes(l.id)) {
+            const allX = selectedLayers.map(sl => sl.x);
+            const allY = selectedLayers.map(sl => sl.y);
+            const allOp = selectedLayers.map(sl => sl.opacity);
+            
+            posx.value = allX.every(v => v === allX[0]) ? allX[0] : '';
+            posx.placeholder = allX.every(v => v === allX[0]) ? '' : '(複数)';
+            posy.value = allY.every(v => v === allY[0]) ? allY[0] : '';
+            posy.placeholder = allY.every(v => v === allY[0]) ? '' : '(複数)';
+            range.value = allOp.every(v => v === allOp[0]) ? allOp[0] : '0.5';
+
+        } else {
+            posx.value=l.x;
+            posy.value=l.y;
+            range.value=String(l.opacity);
+        }
+
+        const applyToSelection = (updater) => {
+            const targetIds = selectedIds.includes(l.id) ? selectedIds : [l.id];
+            targetIds.forEach(id => {
+                const layer = layers.find(la => la.id === id);
+                if (layer) updater(layer);
+            });
+        };
+
+        posx.onchange=()=>{ applyToSelection(layer => layer.x = parseInt(posx.value)||0); undoManager.recordState('レイヤー位置変更'); };
+        posy.onchange=()=>{ applyToSelection(layer => layer.y = parseInt(posy.value)||0); undoManager.recordState('レイヤー位置変更'); };
+        pos.append('X', posx, 'Y', posy);
+        
+        range.oninput=()=>{ applyToSelection(layer => layer.opacity = parseFloat(range.value)); };
         range.onchange=()=>{ undoManager.recordState('不透明度変更'); };
         op.append('不透明度', range);
+        
         item.append(head, pos, op);
         item.onclick = (e)=>{
           if (e.target.closest('button, input')) return;
-          selectedId=l.id; refreshLayerList(); syncMotionPanel(); syncGifFrameEditor();
+          
+          const clickedId = l.id;
+          if (e.shiftKey && lastSelectedId) {
+            const allIds = layers.map(layer => layer.id).reverse();
+            const lastIdx = allIds.indexOf(lastSelectedId);
+            const currentIdx = allIds.indexOf(clickedId);
+            const start = Math.min(lastIdx, currentIdx);
+            const end = Math.max(lastIdx, currentIdx);
+            selectedIds = allIds.slice(start, end + 1);
+          } else if (e.ctrlKey || e.metaKey) {
+            if (selectedIds.includes(clickedId)) {
+                selectedIds = selectedIds.filter(id => id !== clickedId);
+                if (lastSelectedId === clickedId) {
+                    lastSelectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
+                }
+            } else {
+                selectedIds.push(clickedId);
+                lastSelectedId = clickedId;
+            }
+          } else {
+            selectedIds = [clickedId];
+            lastSelectedId = clickedId;
+          }
+          
+          refreshLayerList();
+          syncPanelsForSelection();
         };
         ui.layers.appendChild(item);
       }
     }
     function fitCanvasToContent(){
       if (!layers.length) return;
-      let minX=0, minY=0, maxX=0, maxY=0;
+      let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
       layers.forEach(l => {
-        const w = l.w, h = l.h;
+        if (!l.visible) return;
+        // NOTE: Does not account for rotation
         minX = Math.min(minX, l.x);
         minY = Math.min(minY, l.y);
-        maxX = Math.max(maxX, l.x + w);
-        maxY = Math.max(maxY, l.y + h);
+        maxX = Math.max(maxX, l.x + l.w);
+        maxY = Math.max(maxY, l.y + l.h);
       });
+      if (!isFinite(minX)) return;
       const W = Math.max(1, Math.ceil(maxX - minX));
       const H = Math.max(1, Math.ceil(maxY - minY));
       stage.width = W; stage.height = H;
@@ -1662,8 +1782,9 @@
     };
     ui.clearAll.onclick = () => {
         if(confirm("すべてのレイヤーを削除しますか？")){
-            layers = []; selectedId=null; refreshLayerList();
-            syncGifFrameEditor();
+            layers = []; selectedIds=[]; lastSelectedId = null; 
+            refreshLayerList();
+            syncPanelsForSelection();
             if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
             undoManager.recordState('全レイヤー削除');
         }
@@ -1701,8 +1822,8 @@
             originalSize = await new Promise((res)=>comp.toBlob(b=>res(b?b.size:null),'image/png'));
             suggestedName = 'composited_optimized.png';
           } else {
-            const l = layers.find(x=>x.id===selectedId);
-            if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
+            const l = getSelectedLayer();
+            if (!l || l.type!=='png' || selectedIds.length > 1) { alert('PNGレイヤーを1つだけ選択してください'); return; }
             suggestedName = (l.name||'selected')+'_optimized.png';
             const src = l.png.originalUrl || l.png.img.src;
             const ab = await fetch(src).then(r=>r.arrayBuffer());
@@ -1795,8 +1916,8 @@
     }
     function formatBytes(n){ if (n==null) return '-'; const u=['B','KB','MB']; let i=0; let v=n; while(v>=1024&&i<u.length-1){v/=1024;i++;} return (i?v.toFixed(1):v)+u[i]; }
     document.getElementById('saveOriginalPNG').onclick = () => {
-      const l = layers.find(x=>x.id===selectedId);
-      if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
+      const l = getSelectedLayer();
+      if (!l || l.type!=='png' || selectedIds.length > 1) { alert('PNGレイヤーを1つだけ選択してください'); return; }
       const src = l.png.originalUrl || l.png.img.src;
       fetch(src).then(r=>r.blob()).then((blob)=>{
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -2373,8 +2494,8 @@
       return out;
     }
     function syncMotionPanel(){
-      const l = layers.find(x=>x.id===selectedId);
-      if (!l || l.type!=='png') {
+      const l = getSelectedLayer();
+      if (!l || l.type!=='png' || selectedIds.length > 1) {
         ui.motionType.value = 'none';
         ui.motionAmp.value = '10';
         ui.motionSpeed.value = '1.0';
@@ -2397,10 +2518,10 @@
     }
     const clamp01 = v => Math.max(0, Math.min(1, v));
     ui.applyMotion.onclick = ()=>{
-      const l = layers.find(x=>x.id===selectedId);
-      if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
+      const targetIds = selectedIds.filter(id => layers.find(l=>l.id===id)?.type === 'png');
+      if (targetIds.length === 0) { alert('PNGレイヤーを選択してください'); return; }
       const period = ui.motionPeriod ? parseFloat(ui.motionPeriod.value) : 0;
-      l.motion = {
+      const motionData = {
         type: ui.motionType.value,
         amp:  Number(ui.motionAmp.value)||0,
         speed:Number(ui.motionSpeed.value)||1.0,
@@ -2410,13 +2531,21 @@
         anchorY: clamp01(((ui.motionAnchorY ? parseFloat(ui.motionAnchorY.value) : 50) || 50)/100),
         axisDeg: (ui.motionAxis ? Number(ui.motionAxis.value) : 0)||0
       };
+      targetIds.forEach(id => {
+        const l = layers.find(x=>x.id===id);
+        if (l) l.motion = { ...motionData };
+      });
       refreshLayerList();
       syncMotionPanel();
       undoManager.recordState('モーション適用');
     };
     ui.clearMotion.onclick = ()=>{
-      const l = layers.find(x=>x.id===selectedId); if (!l || l.type!=='png') return;
-      l.motion = { type:'none', amp:10, speed:1.0, period:0, rot:0, anchorX:0.5, anchorY:0.5, axisDeg:0 };
+      const targetIds = selectedIds.filter(id => layers.find(l=>l.id===id)?.type === 'png');
+      if (targetIds.length === 0) return;
+       targetIds.forEach(id => {
+        const l = layers.find(x=>x.id===id);
+        if (l) l.motion = { type:'none', amp:10, speed:1.0, period:0, rot:0, anchorX:0.5, anchorY:0.5, axisDeg:0 };
+      });
       refreshLayerList();
       syncMotionPanel();
       undoManager.recordState('モーション解除');
@@ -2432,6 +2561,37 @@
       c.restore();
     }
     function drawSelectionOverlay(c){
+      if (selectedIds.length === 0) return;
+
+      if (selectedIds.length === 1) {
+        const l = layers.find(x=>x.id===selectedIds[0]);
+        if (!l || !l.visible) return;
+        drawSingleLayerHandles(c, l);
+      } else {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        selectedIds.forEach(id => {
+            const l = layers.find(x => x.id === id);
+            if (!l || !l.visible) return;
+            // Note: Does not account for rotation. A more complex calculation would be needed for rotated groups.
+            minX = Math.min(minX, l.x);
+            minY = Math.min(minY, l.y);
+            maxX = Math.max(maxX, l.x + l.w);
+            maxY = Math.max(maxY, l.y + l.h);
+        });
+
+        if (isFinite(minX)) {
+            c.save();
+            c.strokeStyle = '#3399ff'; // A different color for multi-selection
+            c.lineWidth = 2;
+            c.setLineDash([6, 4]);
+            c.strokeRect(minX, minY, maxX - minX, maxY - minY);
+            c.restore();
+        }
+      }
+    }
+    
+    function drawSingleLayerHandles(c, l){
       function drawArrowHead(ctx, x, y, angle, size){
         ctx.save();
         ctx.translate(x, y);
@@ -2444,8 +2604,6 @@
         ctx.fill();
         ctx.restore();
       }
-      const l = layers.find(x=>x.id===selectedId);
-      if (!l || !l.visible) return;
       function drawDiagArrow(ctx, x, y, angle, len){
         ctx.save();
         ctx.translate(x,y);
@@ -2574,6 +2732,8 @@
     const activePointers = new Map();
     let pinchState = null;
     let initialLayerStateOnDrag = null;
+    let initialMultiDragStates = new Map();
+
     function getCanvasXY(e) {
       const rect = stage.getBoundingClientRect();
       const scaleX = stage.width  / rect.width;
@@ -2638,85 +2798,101 @@
       if (activePointers.size === 2) {
         const arr = Array.from(activePointers.values());
         const p1 = arr[0], p2 = arr[1];
-        const l = layers.find(x => x.id === selectedId);
-        if (l) {
-          initialLayerStateOnDrag = JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v);
-          const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-          const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-          pinchState = {
-            startDist: Math.max(1, dist),
-            startAng: ang,
-            startW: l.w, startH: l.h,
-            startRot: Number(l.rot) || 0,
-            startCx: l.x + l.w / 2, startCy: l.y + l.h / 2
-          };
-          action = 'pinch';
+        if (selectedIds.length === 1) {
+          const l = getSelectedLayer();
+          if (l) {
+            initialLayerStateOnDrag = JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v);
+            const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            pinchState = {
+              startDist: Math.max(1, dist),
+              startAng: ang,
+              startW: l.w, startH: l.h,
+              startRot: Number(l.rot) || 0,
+              startCx: l.x + l.w / 2, startCy: l.y + l.h / 2
+            };
+            action = 'pinch';
+          }
         }
         return;
       }
-
+      
       const lockEnabled = ui.lockSelectedLayer && ui.lockSelectedLayer.checked;
       let l = getSelectedLayer();
 
       if (lockEnabled) {
-          if (!l || !l.visible) return;
-          const isOverHandle = isOverAnyHandle(l, p.x, p.y, handleRadiusFor(p.type));
-          if (!pointInLayer(l, p.x, p.y) && !isOverHandle) return;
+          if (selectedIds.length === 0) return;
+          const isOverAnySelected = selectedIds.some(id => {
+            const currentLayer = layers.find(layer => layer.id === id);
+            return currentLayer && currentLayer.visible && pointInLayer(currentLayer, p.x, p.y);
+          });
+          const isOverPrimaryHandle = l && isOverAnyHandle(l, p.x, p.y, handleRadiusFor(p.type));
+          if (!isOverAnySelected && !isOverPrimaryHandle) return;
       } else {
           const lTop = topLayerAt(p.x, p.y);
-          if (lTop && lTop.id !== selectedId) {
-            selectedId = lTop.id;
+          if (lTop && !selectedIds.includes(lTop.id)) {
+            selectedIds = [lTop.id];
+            lastSelectedId = lTop.id;
             refreshLayerList();
-            syncMotionPanel();
-            syncGifFrameEditor();
+            syncPanelsForSelection();
           }
           l = getSelectedLayer();
       }
       
-      if (!l || !l.visible) return;
+      if (selectedIds.length === 0) return;
       
-      initialLayerStateOnDrag = JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v);
+      initialMultiDragStates.clear();
+      selectedIds.forEach(id => {
+          const layer = layers.find(la => la.id === id);
+          if (layer) initialMultiDragStates.set(id, {x: layer.x, y: layer.y});
+      });
 
-      const cxh = l.x + l.w / 2, cyh = l.y + l.h / 2;
-      const rad = (Number(l.rot) || 0) * Math.PI / 180;
-      const r = handleRadiusFor(p.type);
-      function rotp(dx, dy) { return { x: cxh + (dx * Math.cos(rad) - dy * Math.sin(rad)), y: cyh + (dx * Math.sin(rad) + dy * Math.cos(rad)) }; }
-      const near = (ax, ay, bx, by) => Math.hypot(ax-bx, ay-by) <= r;
-      const pFlip = rotp(-l.w / 2 + 10, -l.h / 2 + 10);
-      const pReset = rotp(l.w / 2 - 10, -l.h / 2 + 10);
-      if (near(p.x, p.y, pFlip.x, pFlip.y)) { l.flipX = !l.flipX; undoManager.recordState('レイヤー反転'); return; }
-      if (near(p.x, p.y, pReset.x, pReset.y)) {
-        const baseW = l.origW || l.w, baseH = l.origH || l.h;
-        const r0 = baseW / baseH;
-        const candA = { w: Math.max(1, Math.round(l.h * r0)), h: l.h };
-        const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r0)) };
-        const best = (Math.abs(candA.w - l.w) <= Math.abs(candB.h - l.h)) ? candA : candB;
-        l.w = best.w; l.h = best.h;
-        l.x = Math.round(cxh - l.w / 2);
-        l.y = Math.round(cyh - l.h / 2);
-        undoManager.recordState('レイヤーリセット');
-        return;
+      if (selectedIds.length === 1 && l) {
+        initialLayerStateOnDrag = JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v);
+        const cxh = l.x + l.w / 2, cyh = l.y + l.h / 2;
+        const rad = (Number(l.rot) || 0) * Math.PI / 180;
+        const r = handleRadiusFor(p.type);
+        function rotp(dx, dy) { return { x: cxh + (dx * Math.cos(rad) - dy * Math.sin(rad)), y: cyh + (dx * Math.sin(rad) + dy * Math.cos(rad)) }; }
+        const near = (ax, ay, bx, by) => Math.hypot(ax-bx, ay-by) <= r;
+        const pFlip = rotp(-l.w / 2 + 10, -l.h / 2 + 10);
+        const pReset = rotp(l.w / 2 - 10, -l.h / 2 + 10);
+        if (near(p.x, p.y, pFlip.x, pFlip.y)) { l.flipX = !l.flipX; undoManager.recordState('レイヤー反転'); return; }
+        if (near(p.x, p.y, pReset.x, pReset.y)) {
+          const baseW = l.origW || l.w, baseH = l.origH || l.h;
+          const r0 = baseW / baseH;
+          const candA = { w: Math.max(1, Math.round(l.h * r0)), h: l.h };
+          const candB = { w: l.w, h: Math.max(1, Math.round(l.w / r0)) };
+          const best = (Math.abs(candA.w - l.w) <= Math.abs(candB.h - l.h)) ? candA : candB;
+          l.w = best.w; l.h = best.h;
+          l.x = Math.round(cxh - l.w / 2);
+          l.y = Math.round(cyh - l.h / 2);
+          undoManager.recordState('レイヤーリセット');
+          return;
+        }
+        const topMid = rotp(0, -l.h / 2), bottomMid = rotp(0, l.h / 2), leftMid = rotp(-l.w / 2, 0), rightMid = rotp(l.w / 2, 0);
+        if (near(p.x, p.y, topMid.x, topMid.y)) { action = 'resize-edge'; resizeEdge = 'top'; }
+        else if (near(p.x, p.y, bottomMid.x, bottomMid.y)) { action = 'resize-edge'; resizeEdge = 'bottom'; }
+        else if (near(p.x, p.y, leftMid.x, leftMid.y)) { action = 'resize-edge'; resizeEdge = 'left'; }
+        else if (near(p.x, p.y, rightMid.x, rightMid.y)) { action = 'resize-edge'; resizeEdge = 'right'; }
+        if(action === 'resize-edge') {
+          startRect = { x: l.x, y: l.y, w: l.w, h: l.h }; stage.classList.add('dragging'); return;
+        }
+        const bl = rotp(-l.w / 2, l.h / 2);
+        const br = rotp(l.w / 2, l.h / 2);
+        if (near(p.x, p.y, br.x, br.y)) {
+          action = 'scale';
+          scaleState = { cx: cxh, cy: cyh, startW: l.w, startH: l.h, startDist: Math.hypot(br.x - cxh, br.y - cyh) };
+        } else if (near(p.x, p.y, bl.x, bl.y)) {
+          action = 'rotate';
+          rotateState = { cx: cxh, cy: cyh, startAngle: Math.atan2(p.y - cyh, p.x - cxh), startRot: Number(l.rot) || 0 };
+        }
       }
-      const topMid = rotp(0, -l.h / 2), bottomMid = rotp(0, l.h / 2), leftMid = rotp(-l.w / 2, 0), rightMid = rotp(l.w / 2, 0);
-      if (near(p.x, p.y, topMid.x, topMid.y)) { action = 'resize-edge'; resizeEdge = 'top'; }
-      else if (near(p.x, p.y, bottomMid.x, bottomMid.y)) { action = 'resize-edge'; resizeEdge = 'bottom'; }
-      else if (near(p.x, p.y, leftMid.x, leftMid.y)) { action = 'resize-edge'; resizeEdge = 'left'; }
-      else if (near(p.x, p.y, rightMid.x, rightMid.y)) { action = 'resize-edge'; resizeEdge = 'right'; }
-      if(action === 'resize-edge') {
-        startRect = { x: l.x, y: l.y, w: l.w, h: l.h }; stage.classList.add('dragging'); return;
-      }
-      const bl = rotp(-l.w / 2, l.h / 2);
-      const br = rotp(l.w / 2, l.h / 2);
-      if (near(p.x, p.y, br.x, br.y)) {
-        action = 'scale';
-        scaleState = { cx: cxh, cy: cyh, startW: l.w, startH: l.h, startDist: Math.hypot(br.x - cxh, br.y - cyh) };
-      } else if (near(p.x, p.y, bl.x, bl.y)) {
-        action = 'rotate';
-        rotateState = { cx: cxh, cy: cyh, startAngle: Math.atan2(p.y - cyh, p.x - cxh), startRot: Number(l.rot) || 0 };
-      } else if (pointInLayer(l, p.x, p.y)) {
+
+      if (!action) {
         action = 'move';
-        dragOffX = p.x - l.x; dragOffY = p.y - l.y;
+        dragOffX = p.x; dragOffY = p.y;
       }
+      
       if(action) stage.classList.add('dragging');
     }, { passive: false });
     window.addEventListener('pointermove', (e) => {
@@ -2724,8 +2900,8 @@
       const p = getCanvasXY(e);
       activePointers.set(e.pointerId, p);
       e.preventDefault();
-      const l = layers.find(x => x.id === selectedId);
-      if (!l || !action) return;
+      const l = getSelectedLayer();
+      if (selectedIds.length === 0 || !action) return;
       if (action === 'pinch' && activePointers.size >= 2 && pinchState) {
         const arr = Array.from(activePointers.values());
         const p1 = arr[0], p2 = arr[1];
@@ -2742,8 +2918,18 @@
       }
       if (activePointers.size > 1) return;
       if (action === 'move') {
-        const s = snapRect(Math.round(p.x - dragOffX), Math.round(p.y - dragOffY), l.w, l.h, l);
-        l.x = s.x; l.y = s.y;
+        const dx = p.x - dragOffX;
+        const dy = p.y - dragOffY;
+        selectedIds.forEach(id => {
+            const layer = layers.find(la => la.id === id);
+            const startState = initialMultiDragStates.get(id);
+            if (layer && startState) {
+                const s = snapRect(startState.x + dx, startState.y + dy, layer.w, layer.h, layer);
+                layer.x = s.x;
+                layer.y = s.y;
+            }
+        });
+
       } else if (action === 'resize-edge' && startRect) {
         const {x: ox, y: oy, w: ow, h: oh} = startRect;
         const rad = (Number(l.rot) || 0) * Math.PI / 180;
@@ -2781,9 +2967,16 @@
         activePointers.delete(e.pointerId);
         
         if (action && activePointers.size === 0) {
-            const l = getSelectedLayer();
-            const endState = l ? JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v) : null;
-            if (l && initialLayerStateOnDrag !== endState) {
+            let stateChanged = false;
+            if (selectedIds.length === 1 && initialLayerStateOnDrag) {
+                const l = getSelectedLayer();
+                const endState = l ? JSON.stringify(l, (k,v) => (k==='png'||k==='gif')?undefined:v) : null;
+                stateChanged = initialLayerStateOnDrag !== endState;
+            } else if (selectedIds.length > 1) {
+                stateChanged = true; // Assume changed for multi-drag
+            }
+
+            if (stateChanged) {
                 let description = '';
                 switch(action) {
                     case 'move': description = 'レイヤー移動'; break;
@@ -2801,6 +2994,7 @@
         }
         if (activePointers.size === 0) {
             action = null; resizeEdge = null; startRect = null; scaleState = null; rotateState = null; pinchState = null; initialLayerStateOnDrag = null;
+            initialMultiDragStates.clear();
             stage.classList.remove('dragging');
         }
         try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
@@ -2823,15 +3017,27 @@
         return;
       }
 
-      const l = layers.find(x => x.id===selectedId); if (!l) return;
+      if (selectedIds.length === 0) return;
       let d = 1;
       if (e.shiftKey) d = 10;
       if (e.ctrlKey || e.metaKey) d = 50;
       let moved = false;
-      if (e.key==='ArrowLeft')  { const s=snapRect(l.x-d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
-      if (e.key==='ArrowRight') { const s=snapRect(l.x+d, l.y, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
-      if (e.key==='ArrowUp')    { const s=snapRect(l.x, l.y-d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
-      if (e.key==='ArrowDown')  { const s=snapRect(l.x, l.y+d, l.w, l.h, l); l.x=s.x; l.y=s.y; e.preventDefault(); moved = true; }
+      const moveLayers = (dx, dy) => {
+          selectedIds.forEach(id => {
+              const l = layers.find(x => x.id === id);
+              if (l) {
+                const s = snapRect(l.x + dx, l.y + dy, l.w, l.h, l);
+                l.x = s.x; l.y = s.y;
+              }
+          });
+          e.preventDefault();
+          moved = true;
+      };
+
+      if (e.key==='ArrowLeft')  moveLayers(-d, 0);
+      if (e.key==='ArrowRight') moveLayers(d, 0);
+      if (e.key==='ArrowUp')    moveLayers(0, -d);
+      if (e.key==='ArrowDown')  moveLayers(0, d);
       
       if (moved) {
         clearTimeout(moveDebounceTimer);
@@ -2880,7 +3086,8 @@
     })();
 
     function getSelectedLayer() {
-      return layers.find(x => x.id === selectedId) || null;
+      if (selectedIds.length !== 1) return null;
+      return layers.find(x => x.id === selectedIds[0]) || null;
     }
     
     function switchGifEditorTab(tabName) {
