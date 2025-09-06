@@ -357,28 +357,7 @@
       color:#eee; font-size:11px; padding:1px 4px; border-radius:4px;
     }
     .gif-fe__thumb.selected { outline:2px solid var(--accent); }
-    /* サムネの右上 削除ボタン */
-    .gif-fe__thumb .gif-fe__del {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      width: 18px;
-      height: 18px;
-      border-radius: 9px;
-      background: rgba(0,0,0,0.6);
-      color: #eee;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      line-height: 1;
-      cursor: pointer;
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-    .gif-fe__thumb .gif-fe__del:hover {
-      background: rgba(255,0,0,0.75);
-    }
-    /* タブUI */
+    /* サムネの右上 削除ボタンは廃止 */
     .gif-fe__tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -518,8 +497,7 @@
                   <!-- タブ切り替えUI -->
                   <div class="gif-fe__tabs">
                     <button id="gifFETabThumbs" class="gif-fe__tab-btn active" data-tab="thumbs">一覧</button>
-                    <button id="gifFETabEdit1" class="gif-fe__tab-btn" data-tab="edit1">編集1</button>
-                    <button id="gifFETabEdit2" class="gif-fe__tab-btn" data-tab="edit2">編集2</button>
+                    <button id="gifFETabEdit" class="gif-fe__tab-btn" data-tab="edit">編集</button>
                   </div>
 
                   <!-- タブパネル -->
@@ -527,26 +505,19 @@
                     <!-- フレーム一覧パネル -->
                     <div id="gifFEPanelThumbs" class="gif-fe__panel active">
                       <div class="row small" style="justify-content: flex-end; margin-bottom: 8px;">
-                        <button id="gifFEDup" class="btn small">選択フレームを複製</button>
-                        <button id="gifFEDelete" class="btn small danger">選択フレームを削除</button>
-                      </div>
-                      <div id="gifFEThumbs" class="gif-fe__thumbs"></div>
-                    </div>
-                    <!-- フレーム編集1パネル (基本操作) -->
-                    <div id="gifFEPanelEdit1" class="gif-fe__panel">
-                      <div class="gif-fe__tools row small">
-                        <label>遅延(ms)
+                        <button id="gifFEUndo" class="btn small" title="GIFフレーム編集の直前の操作を取り消します" disabled>元に戻す</button>
+                        <button id="gifFEDup" class="btn small">複製</button>
+                        <button id="gifFEDelete" class="btn small danger">削除</button>
+                        <label style="margin-left: 12px;">遅延(ms)
                           <input id="gifFEDelay" type="number" min="10" step="10" value="100" style="width:90px">
                         </label>
                         <button id="gifFEDelayApplyAll" class="btn small" title="全フレームに同じ遅延を適用">全適用</button>
-                        <span class="muted" style="margin-left:8px">（10ms刻み推奨）</span>
                       </div>
-                      <div class="row small" style="margin-top:8px;">
-                        <button id="gifFEUndo" class="btn small" title="GIFフレーム編集の直前の操作を取り消します" disabled>元に戻す</button>
-                      </div>
+                      <div class="muted small" style="text-align: right; margin-bottom: 8px;">（10ms刻み推奨）</div>
+                      <div id="gifFEThumbs" class="gif-fe__thumbs"></div>
                     </div>
-                    <!-- フレーム編集2パネル (画像操作) -->
-                    <div id="gifFEPanelEdit2" class="gif-fe__panel">
+                    <!-- フレーム編集パネル (画像操作) -->
+                    <div id="gifFEPanelEdit" class="gif-fe__panel">
                       <div class="gif-fe__replace row small">
                         <button id="gifFEReplaceFromComposite" class="btn small" title="現在の合成結果でこのフレーム画像を置換">合成から差し替え</button>
                         <label class="btn small" title="画像ファイルで差し替え">
@@ -1174,7 +1145,7 @@
           if (savedLayer.hasPngResource) {
             restoredLayer.png = resourceManager.getPngResource(savedLayer.id);
             if (!restoredLayer.png) {
-              console.warn(`PNG resource not found for layer ${savedLayer.id}`);
+                            console.warn(`PNG resource not found for layer ${savedLayer.id}`);
               return null;
             }
           } else if (savedLayer.hasGifResource) {
@@ -1340,11 +1311,9 @@
       gifFEStampDo: document.getElementById('gifFEStampDo'),
       // タブUI
       gifFETabThumbs: document.getElementById('gifFETabThumbs'),
-      gifFETabEdit1: document.getElementById('gifFETabEdit1'),
-      gifFETabEdit2: document.getElementById('gifFETabEdit2'),
+      gifFETabEdit: document.getElementById('gifFETabEdit'),
       gifFEPanelThumbs: document.getElementById('gifFEPanelThumbs'),
-      gifFEPanelEdit1: document.getElementById('gifFEPanelEdit1'),
-      gifFEPanelEdit2: document.getElementById('gifFEPanelEdit2'),
+      gifFEPanelEdit: document.getElementById('gifFEPanelEdit'),
     };
     const gifFEState = { idx: 0 };
     const gifUndoHistory = new Map();
@@ -2889,11 +2858,9 @@
     
     function switchGifEditorTab(tabName) {
       ui.gifFETabThumbs.classList.toggle('active', tabName === 'thumbs');
-      ui.gifFETabEdit1.classList.toggle('active', tabName === 'edit1');
-      ui.gifFETabEdit2.classList.toggle('active', tabName === 'edit2');
+      ui.gifFETabEdit.classList.toggle('active', tabName === 'edit');
       ui.gifFEPanelThumbs.classList.toggle('active', tabName === 'thumbs');
-      ui.gifFEPanelEdit1.classList.toggle('active', tabName === 'edit1');
-      ui.gifFEPanelEdit2.classList.toggle('active', tabName === 'edit2');
+      ui.gifFEPanelEdit.classList.toggle('active', tabName === 'edit');
     }
 
     function syncGifFrameEditor() {
@@ -2902,7 +2869,7 @@
         ui.gifFrameEditor.hidden = true;
         return;
       }
-      if (!ui.gifFEPanelThumbs.classList.contains('active') && !ui.gifFEPanelEdit1.classList.contains('active') && !ui.gifFEPanelEdit2.classList.contains('active')) {
+      if (!ui.gifFEPanelThumbs.classList.contains('active') && !ui.gifFEPanelEdit.classList.contains('active')) {
         switchGifEditorTab('thumbs');
       }
       ui.gifFrameEditor.hidden = false;
@@ -2991,27 +2958,8 @@
         delayTag.className = 'gif-fe__delay';
         delayTag.textContent = `${fr.delay|0}ms`;
         
-        const delBtn = document.createElement('div');
-        delBtn.className = 'gif-fe__del';
-        delBtn.title = 'このフレームを削除';
-        delBtn.textContent = '✖';
-        delBtn.onclick = (ev) => {
-          ev.stopPropagation();
-          withGifUndo(layer, () => {
-            if (layer.gif.frames.length <= 1) {
-              alert('最後のフレームは削除できません');
-              return false;
-            }
-            layer.gif.frames.splice(i, 1);
-            if (gifFEState.idx >= layer.gif.frames.length) {
-              gifFEState.idx = layer.gif.frames.length - 1;
-            }
-          });
-        };
-
         slot.appendChild(cnv);
         slot.appendChild(delayTag);
-        slot.appendChild(delBtn);
         slot.title = `#${i+1} (${fr.delay|0}ms)`;
         slot.onclick = () => {
           gifFEState.idx = i;
@@ -3035,8 +2983,7 @@
     }
 
     ui.gifFETabThumbs?.addEventListener('click', () => switchGifEditorTab('thumbs'));
-    ui.gifFETabEdit1?.addEventListener('click', () => switchGifEditorTab('edit1'));
-    ui.gifFETabEdit2?.addEventListener('click', () => switchGifEditorTab('edit2'));
+    ui.gifFETabEdit?.addEventListener('click', () => switchGifEditorTab('edit'));
 
     ui.gifFEPrev?.addEventListener('click', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
