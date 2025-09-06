@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -452,102 +451,24 @@
       border-color: var(--accent);
       color: var(--text-light);
     }
-
-    /* === START: Paint Feature CSS === */
-    .paint-preview {
-        position: relative;
-        background: #0a0a0a;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 8px;
-        margin: 8px 0;
+    /* === 追加: ペイント機能のスタイル === */
+    #paintSection .btn.active {
+      background-color: var(--accent);
+      border-color: #3b8c3f;
     }
-    .paint-canvas {
-        display: block;
-        max-width: 100%;
-        height: auto;
-        max-height: 200px;
-        margin: 0 auto;
-        image-rendering: pixelated;
-        cursor: crosshair;
-        background: 
-            linear-gradient(45deg, #222 25%, transparent 25%),
-            linear-gradient(-45deg, #222 25%, transparent 25%),
-            linear-gradient(45deg, transparent 75%, #222 75%),
-            linear-gradient(-45deg, transparent 75%, #222 75%);
-        background-size: 10px 10px;
-        background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
-        touch-action: none;
+    #paintSection label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
-    .paint-canvas.tool-eraser { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="none" stroke="white" stroke-width="2"/><circle cx="10" cy="10" r="8" fill="none" stroke="black" stroke-width="1"/></svg>') 10 10, auto; }
-    .paint-canvas.tool-fill { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><path d="M10 2 L18 10 L10 18 L2 10 Z" fill="none" stroke="white" stroke-width="2"/><path d="M10 2 L18 10 L10 18 L2 10 Z" fill="none" stroke="black" stroke-width="1"/></svg>') 10 10, auto; }
-    .paint-canvas.tool-picker { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="3" fill="none" stroke="white" stroke-width="2"/><circle cx="10" cy="10" r="3" fill="none" stroke="black" stroke-width="1"/></svg>') 10 10, auto; }
-    .paint-canvas.tool-blur { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="6" fill="rgba(255,255,255,0.3)" stroke="white" stroke-width="1"/></svg>') 10 10, auto; }
-    .paint-info {
-        position: absolute;
-        top: 4px;
-        right: 8px;
-        font-size: 10px;
-        color: var(--muted);
-        background: rgba(0,0,0,0.7);
-        padding: 2px 6px;
-        border-radius: 4px;
-        pointer-events: none;
+    #paintSection .tool-options {
+      display: none;
     }
-    .paint-toolbar {
-        display: flex;
-        gap: 4px;
-        margin: 8px 0;
-        padding: 6px;
-        background: var(--bg-tertiary);
-        border-radius: 6px;
+    #paintSection .tool-options.active {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
-    .paint-tool {
-        flex: 1;
-        padding: 8px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        color: var(--text);
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    .paint-tool:hover {
-        background: #333;
-        transform: translateY(-1px);
-    }
-    .paint-tool.active {
-        background: var(--accent);
-        color: white;
-        border-color: var(--accent);
-    }
-    .tool-icon {
-        font-size: 18px;
-        display: block;
-        pointer-events: none;
-    }
-    .tool-settings {
-        padding: 8px;
-        background: var(--bg-tertiary);
-        border-radius: 6px;
-        margin: 8px 0;
-    }
-    .picked-color {
-        width: 30px;
-        height: 30px;
-        border: 2px solid var(--border);
-        border-radius: 4px;
-        display: inline-block;
-        vertical-align: middle;
-        margin-left: 8px;
-    }
-    .paint-common {
-        padding: 8px;
-        background: var(--bg-tertiary);
-        border-radius: 6px;
-        margin-top: 8px;
-    }
-    /* === END: Paint Feature CSS === */
   </style>
 </head>
 <body>
@@ -572,93 +493,48 @@
                     </div>
                     <div class="muted" style="margin-top:6px">上ほど前面。クリックで選択、キャンバス上でドラッグ移動。</div>
                 </div>
-
-                <!-- START: Paint Feature HTML -->
-                <div class="section" id="paintSection" hidden>
-                    <h2>ペイント編集</h2>
-                    
-                    <div class="paint-preview">
-                        <canvas id="paintCanvas" class="paint-canvas"></canvas>
-                        <div class="paint-info">
-                            <span id="paintLayerName">レイヤー未選択</span>
-                            <span id="paintFrameInfo"></span>
-                        </div>
+                <!-- === ペイント機能ここから === -->
+                <details open class="section" id="paintSection">
+                    <summary>ペイント（ベータ）</summary>
+                    <div class="row small" style="gap:6px; flex-wrap:wrap;">
+                        <button id="paintToolEyedropper" class="btn small" title="スポイト (I)">💧</button>
+                        <button id="paintToolFill" class="btn small" title="塗りつぶし (G)">🖌️</button>
+                        <button id="paintToolEraser" class="btn small" title="消しゴム (E)">⌫</button>
+                        <button id="paintToolBlur" class="btn small" title="ぼかし (B)">💧</button>
+                        <label>色 <input type="color" id="paintColor" value="#000000"></label>
+                        
+                        <span id="fillOpts" class="tool-options">
+                            <label>許容 <input type="number" id="paintFillTolerance" min="0" max="255" value="20" style="width:60px !important"></label>
+                            <label>対象
+                                <select id="paintFillMode" style="width:100px !important">
+                                    <option value="connected">連結領域</option>
+                                    <option value="all">全域</option>
+                                </select>
+                            </label>
+                        </span>
+                        <span id="eraserOpts" class="tool-options">
+                            <label>半径 <input type="number" id="paintEraserRadius" min="1" max="256" value="16" style="width:60px !important"></label>
+                        </span>
+                        <span id="blurOpts" class="tool-options">
+                            <label>半径 <input type="number" id="paintBlurRadius" min="1" max="64" value="8" style="width:60px !important"></label>
+                            <label>強度 <input type="number" id="paintBlurPasses" min="1" max="5" value="1" style="width:60px !important"></label>
+                        </span>
                     </div>
-                    
-                    <div class="paint-toolbar">
-                        <button class="paint-tool" data-tool="eraser" title="消しゴム"><span class="tool-icon">🧹</span></button>
-                        <button class="paint-tool" data-tool="fill" title="塗りつぶし"><span class="tool-icon">🪣</span></button>
-                        <button class="paint-tool" data-tool="picker" title="スポイト"><span class="tool-icon">💉</span></button>
-                        <button class="paint-tool" data-tool="blur" title="ぼかし"><span class="tool-icon">💨</span></button>
+                    <div class="row small" style="justify-content:space-between; align-items:center; margin-top:6px;">
+                        <span id="paintTargetInfo" class="muted">対象: -</span>
+                        <label>ズーム <input type="range" id="paintZoom" min="25" max="800" step="5" value="100" style="width:160px"> <span id="paintZoomLabel" class="small muted">100%</span></label>
                     </div>
-                    
-                    <div class="paint-settings">
-                        <div class="tool-settings" data-for="eraser">
-                            <div class="row small">
-                                <label>サイズ
-                                    <input type="range" id="eraserSize" min="1" max="100" value="20" style="width: 100px !important;">
-                                    <span id="eraserSizeVal">20</span>px
-                                </label>
-                                <label><input type="checkbox" id="eraserSoft"> ソフト</label>
-                            </div>
-                        </div>
-                        <div class="tool-settings" data-for="fill" hidden>
-                             <div class="row small">
-                                <label>許容値
-                                    <input type="range" id="fillTolerance" min="0" max="100" value="10" style="width: 100px !important;">
-                                    <span id="fillToleranceVal">10</span>%
-                                </label>
-                                <label><input type="checkbox" id="fillContiguous" checked> 隣接のみ</label>
-                            </div>
-                        </div>
-                        <div class="tool-settings" data-for="picker" hidden>
-                           <div class="row small">
-                                <label>サンプル範囲
-                                    <select id="pickerSample">
-                                        <option value="1">1×1</option>
-                                        <option value="3">3×3平均</option>
-                                        <option value="5">5×5平均</option>
-                                    </select>
-                                </label>
-                           </div>
-                        </div>
-                        <div class="tool-settings" data-for="blur" hidden>
-                            <div class="row small">
-                                <label>強度
-                                    <input type="range" id="blurStrength" min="1" max="10" value="3" style="width: 80px !important;">
-                                    <span id="blurStrengthVal">3</span>
-                                </label>
-                                <label>サイズ
-                                    <input type="range" id="blurSize" min="5" max="100" value="30" style="width: 80px !important;">
-                                    <span id="blurSizeVal">30</span>px
-                                </label>
-                            </div>
-                        </div>
+                    <div style="margin-top:6px; background: conic-gradient(#ddd 0.25turn, #bbb 0 0.5turn, #ddd 0 0.75turn, #bbb 0) 0 0/16px 16px; border:1px solid var(--border); border-radius:8px; padding:6px; display:flex; justify-content:center; min-height:150px; align-items:center;">
+                        <canvas id="paintCanvas" width="256" height="256" style="image-rendering: pixelated; max-width:100%; height:auto;"></canvas>
                     </div>
-                    
-                    <div class="paint-common">
-                        <div class="row small" style="justify-content: space-between;">
-                            <div>
-                                <label>色
-                                    <input type="color" id="paintColor" value="#ff0000">
-                                </label>
-                                <div id="pickedColor" class="picked-color" style="background: #ff0000;"></div>
-                            </div>
-                            <div>
-                                <button class="btn small" id="paintUndo" disabled>元に戻す</button>
-                                <button class="btn small" id="paintRedo" disabled>やり直す</button>
-                            </div>
-                        </div>
-                         <div class="row small" style="margin-top: 8px;">
-                            <button class="btn primary" id="paintApply" style="width: 100%;">この編集を適用</button>
-                        </div>
+                    <div class="row small" style="margin-top:6px; gap:6px; justify-content:flex-end;">
+                        <button id="paintUndo" class="btn small" disabled>元に戻す</button>
+                        <button id="paintRedo" class="btn small" disabled>やり直す</button>
+                        <button id="paintApplyToPng" class="btn small" title="PNGの編集を確定" disabled>適用</button>
+                        <button id="paintRevertPng" class="btn small danger" title="PNGの編集を破棄" disabled>破棄</button>
                     </div>
-                    <div class="muted small" style="margin-top: 6px;">
-                        ※ 編集内容は「適用」ボタンでレイヤーに確定されます
-                    </div>
-                </div>
-                <!-- END: Paint Feature HTML -->
-
+                </details>
+                <!-- === ペイント機能ここまで === -->
                 <div class="section">
                     <details open>
                       <summary>モーション（PNG専用）</summary>
@@ -1178,7 +1054,7 @@
 
     // === 改良版リソース管理システム ===
     const resourceManager = {
-      pngResources: new Map(), // id -> {img, originalUrl, refCount}
+      pngResources: new Map(), // id -> {img, originalUrl, refCount, canvas, dirty, originalImageData}
       gifResources: new Map(), // id -> {frames, cumul, duration, refCount}
       
       savePngResource(layerId, pngData) {
@@ -1188,7 +1064,10 @@
           this.pngResources.set(layerId, {
             img: pngData.img,
             originalUrl: pngData.originalUrl,
-            refCount: 1
+            refCount: 1,
+            canvas: null,
+            dirty: false,
+            originalImageData: null,
           });
         }
       },
@@ -1211,7 +1090,8 @@
         if (resource) {
           return {
             img: resource.img,
-            originalUrl: resource.originalUrl
+            originalUrl: resource.originalUrl,
+            canvas: resource.canvas,
           };
         }
         return null;
@@ -1334,7 +1214,7 @@
         this.isExecutingUndo = true;
         
         const currentState = this.history[this.currentIndex];
-        this.decreaseReferencesForState(currentState);
+       this.decreaseReferencesForState(currentState);
 
         this.currentIndex--;
         
@@ -1409,6 +1289,7 @@
         refreshLayerList();
         syncMotionPanel();
         syncGifFrameEditor();
+        syncPaintPanel();
         rebuildPngLayerOptions();
         if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
       },
@@ -1548,452 +1429,37 @@
       gifFETabEdit: document.getElementById('gifFETabEdit'),
       gifFEPanelThumbs: document.getElementById('gifFEPanelThumbs'),
       gifFEPanelEdit: document.getElementById('gifFEPanelEdit'),
+      // ペイントUI
+      paintSection: $('#paintSection'),
+      paintCanvas: $('#paintCanvas'),
+      paintToolEyedropper: $('#paintToolEyedropper'),
+      paintToolFill: $('#paintToolFill'),
+      paintToolEraser: $('#paintToolEraser'),
+      paintToolBlur: $('#paintToolBlur'),
+      paintColor: $('#paintColor'),
+      paintFillTolerance: $('#paintFillTolerance'),
+      paintFillMode: $('#paintFillMode'),
+      paintEraserRadius: $('#paintEraserRadius'),
+      paintBlurRadius: $('#paintBlurRadius'),
+      paintBlurPasses: $('#paintBlurPasses'),
+      paintZoom: $('#paintZoom'),
+      paintZoomLabel: $('#paintZoomLabel'),
+      paintTargetInfo: $('#paintTargetInfo'),
+      paintUndo: $('#paintUndo'),
+      paintRedo: $('#paintRedo'),
+      paintApplyToPng: $('#paintApplyToPng'),
+      paintRevertPng: $('#paintRevertPng'),
+      fillOpts: $('#fillOpts'),
+      eraserOpts: $('#eraserOpts'),
+      blurOpts: $('#blurOpts'),
     };
     const gifFEState = { idx: 0 };
     const gifUndoHistory = new Map();
+    const pngPaintHistory = new Map();
     const UNDO_HISTORY_MAX = 20;
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
     
-    // START: Paint Feature Manager
-    const paintManager = {
-        isActive: false,
-        currentTool: 'eraser',
-        currentColor: '#ff0000',
-        workingCanvas: null,
-        workingCtx: null,
-        targetLayer: null,
-        targetFrameIndex: 0,
-        isPainting: false,
-        lastPaintPos: { x: 0, y: 0 },
-        history: [],
-        historyIndex: -1,
-        maxHistory: 20,
-        ui: {
-            section: $('#paintSection'),
-            canvas: $('#paintCanvas'),
-            layerName: $('#paintLayerName'),
-            frameInfo: $('#paintFrameInfo'),
-            toolbar: $('.paint-toolbar'),
-            tools: $$('.paint-tool'),
-            settings: $$('.tool-settings'),
-            colorPicker: $('#paintColor'),
-            pickedColor: $('#pickedColor'),
-            undo: $('#paintUndo'),
-            redo: $('#paintRedo'),
-            apply: $('#paintApply'),
-            eraserSize: $('#eraserSize'),
-            eraserSizeVal: $('#eraserSizeVal'),
-            eraserSoft: $('#eraserSoft'),
-            fillTolerance: $('#fillTolerance'),
-            fillToleranceVal: $('#fillToleranceVal'),
-            fillContiguous: $('#fillContiguous'),
-            pickerSample: $('#pickerSample'),
-            blurStrength: $('#blurStrength'),
-            blurStrengthVal: $('#blurStrengthVal'),
-            blurSize: $('#blurSize'),
-            blurSizeVal: $('#blurSizeVal'),
-        },
-
-        init() {
-            this.workingCanvas = document.createElement('canvas');
-            this.workingCtx = this.workingCanvas.getContext('2d');
-            this.setupEvents();
-            this.setTool('eraser'); // 初期ツール
-        },
-        
-        setupEvents() {
-            // Tool selection
-            this.ui.toolbar.addEventListener('click', e => {
-                const toolBtn = e.target.closest('.paint-tool');
-                if (toolBtn) this.setTool(toolBtn.dataset.tool);
-            });
-
-            // Canvas painting events
-            this.ui.canvas.addEventListener('pointerdown', this.handlePointerDown.bind(this));
-            this.ui.canvas.addEventListener('pointermove', this.handlePointerMove.bind(this));
-            this.ui.canvas.addEventListener('pointerup', this.handlePointerUp.bind(this));
-            this.ui.canvas.addEventListener('pointerleave', this.handlePointerUp.bind(this));
-
-            // Settings change
-            this.ui.colorPicker.addEventListener('input', e => {
-                this.currentColor = e.target.value;
-                this.ui.pickedColor.style.background = e.target.value;
-            });
-            this.ui.eraserSize.addEventListener('input', e => this.ui.eraserSizeVal.textContent = e.target.value);
-            this.ui.fillTolerance.addEventListener('input', e => this.ui.fillToleranceVal.textContent = e.target.value);
-            this.ui.blurStrength.addEventListener('input', e => this.ui.blurStrengthVal.textContent = e.target.value);
-            this.ui.blurSize.addEventListener('input', e => this.ui.blurSizeVal.textContent = e.target.value);
-
-            // Action buttons
-            this.ui.undo.addEventListener('click', this.undo.bind(this));
-            this.ui.redo.addEventListener('click', this.redo.bind(this));
-            this.ui.apply.addEventListener('click', this.applyChanges.bind(this));
-        },
-
-        setTarget(layer, frameIndex = 0) {
-            if (!layer || (layer.type !== 'png' && layer.type !== 'gif')) {
-                this.deactivate();
-                return;
-            }
-
-            this.targetLayer = layer;
-            this.targetFrameIndex = frameIndex;
-            
-            let sourceCanvas;
-            if (layer.type === 'png') {
-                sourceCanvas = document.createElement('canvas');
-                sourceCanvas.width = layer.png.img.naturalWidth;
-                sourceCanvas.height = layer.png.img.naturalHeight;
-                sourceCanvas.getContext('2d').drawImage(layer.png.img, 0, 0);
-            } else {
-                sourceCanvas = layer.gif.frames[frameIndex].canvas;
-            }
-
-            this.workingCanvas.width = sourceCanvas.width;
-            this.workingCanvas.height = sourceCanvas.height;
-            this.workingCtx.drawImage(sourceCanvas, 0, 0);
-            
-            this.history = [this.workingCtx.getImageData(0, 0, this.workingCanvas.width, this.workingCanvas.height)];
-            this.historyIndex = 0;
-
-            this.updateDisplay();
-            this.activate();
-        },
-
-        activate() {
-            this.isActive = true;
-            this.ui.section.hidden = false;
-        },
-
-        deactivate() {
-            this.isActive = false;
-            this.targetLayer = null;
-            this.ui.section.hidden = true;
-        },
-
-        updateDisplay() {
-            if (!this.targetLayer) return;
-
-            // Update info text
-            this.ui.layerName.textContent = this.targetLayer.name;
-            if (this.targetLayer.type === 'gif') {
-                this.ui.frameInfo.textContent = `Frame ${this.targetFrameIndex + 1}`;
-            } else {
-                this.ui.frameInfo.textContent = '';
-            }
-
-            // Draw current state to preview canvas
-            const previewCtx = this.ui.canvas.getContext('2d');
-            this.ui.canvas.width = this.workingCanvas.width;
-            this.ui.canvas.height = this.workingCanvas.height;
-            previewCtx.putImageData(this.history[this.historyIndex], 0, 0);
-            
-            this.updateHistoryButtons();
-        },
-        
-        setTool(toolName) {
-            this.currentTool = toolName;
-            this.ui.tools.forEach(t => t.classList.toggle('active', t.dataset.tool === toolName));
-            this.ui.settings.forEach(s => s.hidden = (s.dataset.for !== toolName));
-            this.ui.canvas.className = `paint-canvas tool-${toolName}`;
-        },
-
-        handlePointerDown(e) {
-            if (!this.isActive || e.button !== 0) return;
-            e.preventDefault();
-            this.isPainting = true;
-            const pos = this.getCanvasPos(e);
-            const tool = this.tools[this.currentTool];
-            if (tool) {
-                if(tool.onMouseDown) tool.onMouseDown.call(this, pos.x, pos.y);
-                if(tool.onClick) tool.onClick.call(this, pos.x, pos.y);
-            }
-        },
-
-        handlePointerMove(e) {
-            if (!this.isActive || !this.isPainting) return;
-            e.preventDefault();
-            const pos = this.getCanvasPos(e);
-            const tool = this.tools[this.currentTool];
-            if (tool && tool.onMouseMove) {
-                tool.onMouseMove.call(this, pos.x, pos.y);
-            }
-        },
-
-        handlePointerUp(e) {
-            if (!this.isActive || !this.isPainting) return;
-            e.preventDefault();
-            this.isPainting = false;
-            const tool = this.tools[this.currentTool];
-            if (tool && tool.onMouseUp) {
-                tool.onMouseUp.call(this);
-            }
-        },
-
-        getCanvasPos(e) {
-            const rect = this.ui.canvas.getBoundingClientRect();
-            const scaleX = this.ui.canvas.width / rect.width;
-            const scaleY = this.ui.canvas.height / rect.height;
-            return {
-                x: Math.round((e.clientX - rect.left) * scaleX),
-                y: Math.round((e.clientY - rect.top) * scaleY)
-            };
-        },
-        
-        saveToHistory() {
-            this.history = this.history.slice(0, this.historyIndex + 1);
-            const newImageData = this.workingCtx.getImageData(0, 0, this.workingCanvas.width, this.workingCanvas.height);
-            this.history.push(newImageData);
-            this.historyIndex++;
-            if (this.history.length > this.maxHistory) {
-                this.history.shift();
-                this.historyIndex--;
-            }
-            this.updateHistoryButtons();
-        },
-
-        undo() {
-            if (this.historyIndex > 0) {
-                this.historyIndex--;
-                this.restoreFromHistory();
-            }
-        },
-
-        redo() {
-            if (this.historyIndex < this.history.length - 1) {
-                this.historyIndex++;
-                this.restoreFromHistory();
-            }
-        },
-
-        restoreFromHistory() {
-            const imageData = this.history[this.historyIndex];
-            this.workingCtx.putImageData(imageData, 0, 0);
-            this.updateDisplay();
-        },
-        
-        updateHistoryButtons() {
-            this.ui.undo.disabled = this.historyIndex <= 0;
-            this.ui.redo.disabled = this.historyIndex >= this.history.length - 1;
-        },
-
-        applyChanges() {
-            if (!this.targetLayer) return;
-
-            const finalImageData = this.history[this.historyIndex];
-            const canvas = document.createElement('canvas');
-            canvas.width = finalImageData.width;
-            canvas.height = finalImageData.height;
-            canvas.getContext('2d').putImageData(finalImageData, 0, 0);
-
-            if (this.targetLayer.type === 'png') {
-                 canvas.toBlob(async (blob) => {
-                    const url = URL.createObjectURL(blob);
-                    const img = new Image();
-                    img.src = url;
-                    await img.decode();
-                    
-                    if (this.targetLayer.png.originalUrl) {
-                        URL.revokeObjectURL(this.targetLayer.png.originalUrl);
-                    }
-                    
-                    this.targetLayer.png.img = img;
-                    this.targetLayer.png.originalUrl = url;
-                    
-                    resourceManager.savePngResource(this.targetLayer.id, this.targetLayer.png);
-                    undoManager.recordState('ペイント編集: ' + this.targetLayer.name);
-                });
-            } else if (this.targetLayer.type === 'gif') {
-                saveGifUndoState(this.targetLayer); // Save state for GIF-specific undo
-                this.targetLayer.gif.frames[this.targetFrameIndex].canvas = canvas;
-                recalcGifTiming(this.targetLayer);
-                syncGifFrameEditor();
-                undoManager.recordState('GIFペイント編集: ' + this.targetLayer.name);
-            }
-            this.deactivate();
-        },
-        
-        // Tool implementations
-        tools: {
-            eraser: {
-                onMouseDown(x, y) { this.startStroke(x, y, true); },
-                onMouseMove(x, y) { this.continueStroke(x, y, true); },
-                onMouseUp() { this.endStroke(); },
-            },
-            blur: {
-                onMouseDown(x, y) { this.startStroke(x, y, false); },
-                onMouseMove(x, y) { this.continueStroke(x, y, false); },
-                onMouseUp() { this.endStroke(); },
-            },
-            fill: {
-                onClick(x, y) { this.applyFill(x,y); }
-            },
-            picker: {
-                onClick(x,y) { this.applyPicker(x,y); }
-            }
-        },
-        
-        startStroke(x, y, isEraser) {
-            this.lastPaintPos = { x, y };
-            if (isEraser) this.applyEraser(x, y); else this.applyBlur(x,y);
-        },
-
-        continueStroke(x, y, isEraser) {
-            const dist = Math.hypot(x - this.lastPaintPos.x, y - this.lastPaintPos.y);
-            const steps = Math.max(1, Math.round(dist / 2)); // Interpolate for smooth lines
-            for (let i = 1; i <= steps; i++) {
-                const t = i / steps;
-                const ix = this.lastPaintPos.x * (1 - t) + x * t;
-                const iy = this.lastPaintPos.y * (1 - t) + y * t;
-                 if (isEraser) this.applyEraser(ix, iy); else this.applyBlur(ix, iy);
-            }
-            this.lastPaintPos = { x, y };
-            this.updateDisplay();
-        },
-        
-        endStroke() {
-            this.saveToHistory();
-        },
-
-        applyEraser(cx, cy) {
-            const size = parseInt(this.ui.eraserSize.value);
-            const soft = this.ui.eraserSoft.checked;
-            const r = size / 2;
-            const imageData = this.workingCtx.getImageData(0, 0, this.workingCanvas.width, this.workingCanvas.height);
-            const data = imageData.data;
-            const w = imageData.width;
-            
-            const startX = Math.floor(Math.max(0, cx - r));
-            const endX = Math.ceil(Math.min(w, cx + r));
-            const startY = Math.floor(Math.max(0, cy - r));
-            const endY = Math.ceil(Math.min(h, cy + r));
-
-            for (let y = startY; y < endY; y++) {
-                for (let x = startX; x < endX; x++) {
-                    const dist = Math.hypot(x - cx, y - cy);
-                    if (dist < r) {
-                        const idx = (y * w + x) * 4;
-                        let alphaFactor = 1;
-                        if(soft) {
-                            alphaFactor = Math.max(0, 1 - dist / r);
-                            alphaFactor = alphaFactor * alphaFactor; // Smoother falloff
-                        }
-                        data[idx + 3] *= (1 - alphaFactor);
-                    }
-                }
-            }
-            this.workingCtx.putImageData(imageData, 0, 0);
-        },
-        
-        applyFill(startX, startY) {
-             const tolerance = parseInt(this.ui.fillTolerance.value) * 2.55; // 0-255 scale
-             const contiguous = this.ui.fillContiguous.checked;
-             const color = this.hexToRgb(this.currentColor);
-             
-             const imgData = this.workingCtx.getImageData(0, 0, this.workingCanvas.width, this.workingCanvas.height);
-             const data = imgData.data;
-             const w = imgData.width, h = imgData.height;
-
-             const startIdx = (startY * w + startX) * 4;
-             const targetColor = [data[startIdx], data[startIdx+1], data[startIdx+2], data[startIdx+3]];
-
-             const colorMatch = (idx) => {
-                 const diff = Math.abs(data[idx] - targetColor[0]) + Math.abs(data[idx+1] - targetColor[1]) +
-                              Math.abs(data[idx+2] - targetColor[2]) + Math.abs(data[idx+3] - targetColor[3]);
-                 return diff <= tolerance * 4;
-             };
-
-             if (contiguous) {
-                 const stack = [[startX, startY]];
-                 const visited = new Uint8Array(w * h);
-                 while(stack.length) {
-                     const [x, y] = stack.pop();
-                     if (x < 0 || x >= w || y < 0 || y >= h || visited[y*w+x]) continue;
-
-                     const idx = (y * w + x) * 4;
-                     if(colorMatch(idx)) {
-                         data[idx] = color.r; data[idx+1] = color.g; data[idx+2] = color.b; data[idx+3] = 255;
-                         visited[y*w+x] = 1;
-                         stack.push([x+1, y], [x-1, y], [x, y+1], [x, y-1]);
-                     }
-                 }
-             } else {
-                 for(let i = 0; i < data.length; i += 4) {
-                     if(colorMatch(i)) {
-                         data[i] = color.r; data[i+1] = color.g; data[i+2] = color.b; data[i+3] = 255;
-                     }
-                 }
-             }
-             this.workingCtx.putImageData(imgData, 0, 0);
-             this.saveToHistory();
-             this.updateDisplay();
-        },
-        
-        applyPicker(x, y) {
-            const sampleSize = parseInt(this.ui.pickerSample.value);
-            const imageData = this.workingCtx.getImageData(0, 0, this.workingCanvas.width, this.workingCanvas.height);
-            const data = imageData.data;
-            const w = imageData.width;
-
-            let r=0,g=0,b=0, count=0;
-            const offset = Math.floor(sampleSize/2);
-            for(let dy=-offset; dy<=offset; dy++) {
-                for(let dx=-offset; dx<=offset; dx++) {
-                    const px = x + dx, py = y + dy;
-                    if(px >= 0 && px < w && py >= 0 && py < h) {
-                        const idx = (py * w + px) * 4;
-                        if(data[idx+3] > 128) {
-                            r += data[idx]; g += data[idx+1]; b += data[idx+2];
-                            count++;
-                        }
-                    }
-                }
-            }
-
-            if (count > 0) {
-                const hex = this.rgbToHex(r/count, g/count, b/count);
-                this.currentColor = hex;
-                this.ui.colorPicker.value = hex;
-                this.ui.pickedColor.style.background = hex;
-            }
-        },
-        
-        applyBlur(cx, cy) {
-            const strength = parseInt(this.ui.blurStrength.value);
-            const size = parseInt(this.ui.blurSize.value);
-            const radius = size / 2;
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = this.workingCanvas.width;
-            tempCanvas.height = this.workingCanvas.height;
-
-            tempCtx.filter = `blur(${strength}px)`;
-            
-            this.workingCtx.save();
-            this.workingCtx.globalCompositeOperation = 'source-over';
-            this.workingCtx.beginPath();
-            this.workingCtx.arc(cx, cy, radius, 0, Math.PI * 2);
-            this.workingCtx.clip();
-            tempCtx.drawImage(this.workingCanvas, 0, 0);
-            this.workingCtx.drawImage(tempCanvas, 0, 0);
-            this.workingCtx.restore();
-        },
-
-        hexToRgb(hex) {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-            return { r, g, b };
-        },
-
-        rgbToHex(r, g, b) {
-            r = Math.round(r); g = Math.round(g); b = Math.round(b);
-            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).padStart(6, '0');
-        },
-    };
-    // END: Paint Feature Manager
-
     function placeEncodeProgress() {
       if (!ui.encodeProgress) return;
       const footer = editorScreen.querySelector('.editor-footer');
@@ -2092,6 +1558,7 @@
       
       refreshLayerList();
       syncGifFrameEditor();
+      syncPaintPanel();
       rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
@@ -2104,6 +1571,7 @@
       const layerName = layer ? layer.name : '';
       
       gifUndoHistory.delete(id);
+      pngPaintHistory.delete(id);
       layers = layers.filter(l => l.id !== id);
       
       if (selectedId === id) {
@@ -2112,6 +1580,7 @@
       
       refreshLayerList();
       syncGifFrameEditor();
+      syncPaintPanel();
       rebuildPngLayerOptions();
       if (ui.liveFit.checked) fitCanvasToContent();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
@@ -2156,6 +1625,7 @@
       selectedId = newLayer.id;
       refreshLayerList();
       syncGifFrameEditor();
+      syncPaintPanel();
       syncMotionPanel();
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
       undoManager.recordState('レイヤー複製: ' + newLayer.name);
@@ -2207,16 +1677,9 @@
         item.append(head, pos, op);
         item.onclick = (e)=>{
           if (e.target.closest('button, input')) return;
-          selectedId=l.id; refreshLayerList(); syncMotionPanel(); syncGifFrameEditor();
+          selectedId=l.id; refreshLayerList(); syncMotionPanel(); syncGifFrameEditor(); syncPaintPanel();
         };
         ui.layers.appendChild(item);
-      }
-      const selectedLayer = layers.find(l => l.id === selectedId);
-      if (selectedLayer) {
-          const frameIndex = selectedLayer.type === 'gif' ? gifFEState.idx : 0;
-          paintManager.setTarget(selectedLayer, frameIndex);
-      } else {
-          paintManager.deactivate();
       }
     }
     function fitCanvasToContent(){
@@ -2317,6 +1780,7 @@
         if(confirm("すべてのレイヤーを削除しますか？")){
             layers = []; selectedId=null; refreshLayerList();
             syncGifFrameEditor();
+            syncPaintPanel();
             if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
             undoManager.recordState('全レイヤー削除');
         }
@@ -2357,19 +1821,28 @@
             const l = layers.find(x=>x.id===selectedId);
             if (!l || l.type!=='png') { alert('PNGレイヤーを選択してください'); return; }
             suggestedName = (l.name||'selected')+'_optimized.png';
-            const src = l.png.originalUrl || l.png.img.src;
-            const ab = await fetch(src).then(r=>r.arrayBuffer());
-            originalSize = ab.byteLength;
-            let dec = null, raws = null;
-            try { dec = UPNG.decode(ab); raws = UPNG.toRGBA8(dec); } catch(e) { dec = null; }
-            if (dec && dec.width && raws && raws[0]) {
-              const raw = raws[0]; W = dec.width; H = dec.height; rgbaU8 = new Uint8Array(raw.buffer.slice(0));
-            } else {
-              const blob = new Blob([ab], {type:'image/png'}); const url = URL.createObjectURL(blob);
-              const img = new Image(); img.src=url; await img.decode();
-              const cnv=document.createElement('canvas'); cnv.width=img.naturalWidth; cnv.height=img.naturalHeight; const c=cnv.getContext('2d');
-              c.drawImage(img,0,0); const id=c.getImageData(0,0,cnv.width,cnv.height);
-              W=cnv.width; H=cnv.height; rgbaU8=new Uint8Array(id.data.buffer.slice(0)); URL.revokeObjectURL(url);
+            
+            const res = resourceManager.pngResources.get(l.id);
+            if (res && res.canvas) { // 編集中のキャンバスから取得
+              const ctx = res.canvas.getContext('2d');
+              const id = ctx.getImageData(0, 0, res.canvas.width, res.canvas.height);
+              W = res.canvas.width; H = res.canvas.height;
+              rgbaU8 = new Uint8Array(id.data.buffer.slice(0));
+            } else { // 元画像から取得
+                const src = l.png.originalUrl || l.png.img.src;
+                const ab = await fetch(src).then(r=>r.arrayBuffer());
+                originalSize = ab.byteLength;
+                let dec = null, raws = null;
+                try { dec = UPNG.decode(ab); raws = UPNG.toRGBA8(dec); } catch(e) { dec = null; }
+                if (dec && dec.width && raws && raws[0]) {
+                  const raw = raws[0]; W = dec.width; H = dec.height; rgbaU8 = new Uint8Array(raw.buffer.slice(0));
+                } else {
+                  const blob = new Blob([ab], {type:'image/png'}); const url = URL.createObjectURL(blob);
+                  const img = new Image(); img.src=url; await img.decode();
+                  const cnv=document.createElement('canvas'); cnv.width=img.naturalWidth; cnv.height=img.naturalHeight; const c=cnv.getContext('2d');
+                  c.drawImage(img,0,0); const id=c.getImageData(0,0,cnv.width,cnv.height);
+                  W=cnv.width; H=cnv.height; rgbaU8=new Uint8Array(id.data.buffer.slice(0)); URL.revokeObjectURL(url);
+                }
             }
           }
           if (alphaSteps>0 && alphaSteps<256) reduceAlphaLevelsInPlace(rgbaU8, alphaSteps);
@@ -2647,6 +2120,10 @@
         targetCtx.save();
         targetCtx.globalAlpha = l.opacity;
         if (l.type === 'png') {
+          const res = resourceManager.pngResources.get(l.id);
+          const source = res?.canvas ?? l.png?.img;
+          if (!source) { targetCtx.restore(); continue; }
+          
           const m = (applyMotion && l.motion) ? l.motion : null;
           if (!m || m.type==='none') {
             const cx = l.x + l.w/2, cy = l.y + l.h/2;
@@ -2654,7 +2131,7 @@
             const rad = ((Number(l.rot)||0) * Math.PI/180);
             if (l.flipX) { targetCtx.scale(-1, 1); }
             targetCtx.rotate(rad);
-            targetCtx.drawImage(l.png.img, -l.w/2, -l.h/2, l.w|0, l.h|0);
+            targetCtx.drawImage(source, -l.w/2, -l.h/2, l.w|0, l.h|0);
           } else {
             applyMotionDraw(targetCtx, l, t);
           }
@@ -2675,6 +2152,7 @@
       }
     }
     function applyMotionDraw(ctx, l, t){
+      const source = resourceManager.pngResources.get(l.id)?.canvas ?? l.png.img;
       const m = l.motion || { type:'none' };
       const amp = Number(m.amp)||0;
       const hz = (m.period && m.period>0) ? (1/Math.max(0.01, m.period)) : Math.max(0.001, Number(m.speed)||1.0);
@@ -2691,7 +2169,7 @@
         ctx.rotate(baseRad);
         ctx.scale(l.flipX ? -s : s, s);
         ctx.rotate(0);
-        ctx.drawImage(l.png.img, -l.w/2, -l.h/2, l.w, l.h);
+        ctx.drawImage(source, -l.w/2, -l.h/2, l.w, l.h);
         return;
       } else if (m.type === 'orbit') {
         dx = Math.cos(tt)*amp; dy = Math.sin(tt)*amp; drot = tt*0.2;
@@ -2711,13 +2189,13 @@
         ctx.scale((l.flipX ? -1 : 1) * sx, sy);
         ctx.rotate(-axisRad);
         ctx.translate(-ax, -ay);
-        ctx.drawImage(l.png.img, -l.w/2, -l.h/2, l.w, l.h);
+        ctx.drawImage(source, -l.w/2, -l.h/2, l.w, l.h);
         return;
       }
       ctx.translate(dx, dy);
       ctx.rotate(baseRad + drot);
       if (l.flipX) ctx.scale(-1, 1);
-      ctx.drawImage(l.png.img, -l.w/2, -l.h/2, l.w, l.h);
+      ctx.drawImage(source, -l.w/2, -l.h/2, l.w, l.h);
     }
     function snapRect(x,y,w,h, self){
       let nx=x, ny=y, nw=Math.max(1,w), nh=Math.max(1,h);
@@ -3322,6 +2800,7 @@
             refreshLayerList();
             syncMotionPanel();
             syncGifFrameEditor();
+            syncPaintPanel();
           }
           l = getSelectedLayer();
       }
@@ -3424,7 +2903,7 @@
         l.y = Math.round(cy - l.h / 2);
       } else if (action === 'rotate' && rotateState) {
         const { cx, cy, startAngle, startRot } = rotateState;
-        const ang = Math.atan2(p.y - cy, p.x - cxh);
+        const ang = Math.atan2(p.y - cy, p.x - cx);
         let deltaDeg = (ang - startAngle) * 180 / Math.PI;
         if (e.shiftKey) { deltaDeg = Math.round(deltaDeg / 15) * 15; }
         l.rot = (startRot + deltaDeg);
@@ -3463,6 +2942,7 @@
     
     let moveDebounceTimer;
     window.addEventListener('keydown', (e) => {
+      if (e.target.closest('#paintSection')) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
         e.preventDefault();
@@ -3566,11 +3046,6 @@
       rebuildPngLayerOptions();
       const history = gifUndoHistory.get(l.id);
       ui.gifFEUndo.disabled = !history || history.length === 0;
-
-      // Update paint manager if active
-      if (paintManager.isActive) {
-          paintManager.setTarget(l, gifFEState.idx);
-      }
     }
     
     function updateThumbFade() {
@@ -3652,6 +3127,7 @@
         slot.onclick = () => {
           gifFEState.idx = i;
           syncGifFrameEditor();
+          syncPaintPanel();
         };
         ui.gifFEThumbs.appendChild(slot);
       }
@@ -3677,11 +3153,13 @@
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
       gifFEState.idx = Math.max(0, gifFEState.idx-1);
       syncGifFrameEditor();
+      syncPaintPanel();
     });
     ui.gifFENext?.addEventListener('click', ()=>{
       const l = getSelectedLayer(); if (!l || l.type!=='gif') return;
       gifFEState.idx = Math.min(l.gif.frames.length-1, gifFEState.idx+1);
       syncGifFrameEditor();
+      syncPaintPanel();
     });
 
     let gifDelayEditSnapshotTaken = false;
@@ -3723,6 +3201,7 @@
       }
       recalcGifTiming(layer);
       syncGifFrameEditor();
+      syncPaintPanel();
     }
     
     ui.gifFEDup?.addEventListener('click', ()=>{
@@ -3766,6 +3245,7 @@
       
       recalcGifTiming(l);
       syncGifFrameEditor();
+      syncPaintPanel();
 
       if (history.length === 0) {
         ui.gifFEUndo.disabled = true;
@@ -3900,7 +3380,8 @@
       if (pngLayer.flipX) ctx.scale(-1, 1);
       ctx.rotate(rad);
       ctx.globalAlpha = pngLayer.opacity;
-      ctx.drawImage(pngLayer.png.img, -pngLayer.w/2, -pngLayer.h/2, pngLayer.w, pngLayer.h);
+      const source = resourceManager.pngResources.get(pngLayer.id)?.canvas ?? pngLayer.png.img;
+      ctx.drawImage(source, -pngLayer.w/2, -pngLayer.h/2, pngLayer.w, pngLayer.h);
       ctx.restore();
     }
 
@@ -3910,6 +3391,7 @@
 
       const outW = dstCanvas.width;
       const outH = dstCanvas.height;
+      const source = resourceManager.pngResources.get(pngLayer.id)?.canvas ?? pngLayer.png.img;
 
       if (mode === 'world') {
         const gifCX = gifLayer.x + gifLayer.w/2;
@@ -3932,31 +3414,24 @@
       }
 
       if (mode === 'fit') {
-        const src = pngLayer.png.img;
-        const iw = src.naturalWidth || src.width;
-        const ih = src.naturalHeight || src.height;
+        const iw = source.width, ih = source.height;
         const scale = Math.min(outW/iw, outH/ih);
-        const dw = Math.round(iw * scale);
-        const dh = Math.round(ih * scale);
-        const dx = Math.floor((outW - dw)/2);
-        const dy = Math.floor((outH - dh)/2);
+        const dw = Math.round(iw * scale), dh = Math.round(ih * scale);
+        const dx = Math.floor((outW - dw)/2), dy = Math.floor((outH - dh)/2);
         gctx.save();
         gctx.globalAlpha = 1;
-        gctx.drawImage(src, dx, dy, dw, dh);
+        gctx.drawImage(source, dx, dy, dw, dh);
         gctx.restore();
         return;
       }
 
       if (mode === 'pixel') {
-        const src = pngLayer.png.img;
-        const iw = src.naturalWidth || src.width;
-        const ih = src.naturalHeight || src.height;
-        const dx = Math.floor(outW/2 - iw/2);
-        const dy = Math.floor(outH/2 - ih/2);
+        const iw = source.width, ih = source.height;
+        const dx = Math.floor(outW/2 - iw/2), dy = Math.floor(outH/2 - ih/2);
         gctx.save();
         gctx.imageSmoothingEnabled = false;
         gctx.globalAlpha = 1;
-        gctx.drawImage(src, dx, dy);
+        gctx.drawImage(source, dx, dy);
         gctx.restore();
         return;
       }
@@ -3982,10 +3457,373 @@
         stampPngOntoGifFrame(gifLayer, pngLayer, frame.canvas, mode, clearBefore);
       });
     });
-
-    // 初期化処理
-    paintManager.init();
     
+    // === ペイント機能ここから ===
+    (function setupPaintTools(){
+      const paintState = {
+        activeTool: 'eyedropper',
+        zoom: 1.0,
+        isPointerDown: false,
+        lastX: 0, lastY: 0,
+        drawX: 0, drawY: 0, drawScale: 1.0,
+      };
+
+      function setActiveTool(toolName) {
+        paintState.activeTool = toolName;
+        ['Eyedropper', 'Fill', 'Eraser', 'Blur'].forEach(t => {
+          const btn = ui[`paintTool${t}`];
+          const opts = ui[`${t.toLowerCase()}Opts`];
+          if (btn) btn.classList.toggle('active', `paintTool${t}`.toLowerCase() === `paintTool${toolName}`.toLowerCase());
+          if (opts) opts.classList.toggle('active', `paintTool${t}`.toLowerCase() === `paintTool${toolName}`.toLowerCase());
+        });
+        ui.paintCanvas.style.cursor = {
+          eyedropper: 'crosshair',
+          fill: 'crosshair',
+          eraser: 'cell',
+          blur: 'cell'
+        }[toolName] || 'default';
+      }
+
+      function getPaintTarget() {
+          const layer = getSelectedLayer();
+          if (!layer || !layer.visible) return null;
+          if (layer.type === 'gif') {
+              const idx = (frameLock.enabled && frameLock.layerId === layer.id) ? frameLock.idx : gifFEState.idx | 0;
+              return { kind: 'gif', layer, idx, canvas: layer.gif.frames[idx].canvas };
+          } else if (layer.type === 'png') {
+              const res = resourceManager.pngResources.get(layer.id);
+              if (!res) return null;
+              if (!res.canvas) {
+                  const W = layer.origW || layer.w, H = layer.origH || layer.h;
+                  const cnv = document.createElement('canvas');
+                  cnv.width = W; cnv.height = H;
+                  const c = cnv.getContext('2d');
+                  c.drawImage(res.img, 0, 0, W, H);
+                  res.canvas = cnv;
+                  res.dirty = false;
+                  res.originalImageData = c.getImageData(0, 0, W, H);
+              }
+              return { kind: 'png', layer, canvas: res.canvas };
+          }
+          return null;
+      }
+      
+      window.syncPaintPanel = function() {
+          const tgt = getPaintTarget();
+          const isPng = tgt && tgt.kind === 'png';
+          ui.paintApplyToPng.disabled = !isPng;
+          ui.paintRevertPng.disabled = !isPng;
+          
+          if (!tgt) {
+              ui.paintTargetInfo.textContent = '対象: -';
+              drawPaintView(null);
+              return;
+          }
+
+          if (tgt.kind === 'gif') {
+              const N = tgt.layer.gif.frames.length;
+              const i = (frameLock.enabled && frameLock.layerId === tgt.layer.id) ? frameLock.idx : gifFEState.idx | 0;
+              ui.paintTargetInfo.textContent = `対象: GIFフレーム ${i + 1}/${N}`;
+          } else {
+              ui.paintTargetInfo.textContent = `対象: PNG (原寸 ${tgt.canvas.width}×${tgt.canvas.height})`;
+          }
+          drawPaintView(tgt.canvas);
+          updatePaintUndoUI(tgt);
+      }
+      
+      function drawPaintView(srcCanvas) {
+          const pc = ui.paintCanvas, pctx = pc.getContext('2d');
+          pctx.clearRect(0, 0, pc.width, pc.height);
+          if (!srcCanvas) return;
+          const z = paintState.zoom;
+          const vw = pc.width, vh = pc.height;
+          const sw = srcCanvas.width, sh = srcCanvas.height;
+          const scale = Math.min(vw / sw, vh / sh) * z;
+          const dw = Math.max(1, Math.round(sw * scale));
+          const dh = Math.max(1, Math.round(sh * scale));
+          
+          pctx.imageSmoothingEnabled = scale < 1;
+          pctx.imageSmoothingQuality = 'high';
+          
+          paintState.drawX = Math.floor((vw - dw) / 2);
+          paintState.drawY = Math.floor((vh - dh) / 2);
+          paintState.drawScale = scale;
+          
+          pctx.drawImage(srcCanvas, paintState.drawX, paintState.drawY, dw, dh);
+      }
+      
+      const viewToImageCoords = (vx, vy, src) => {
+          if (!src) return null;
+          const sx = (vx - paintState.drawX) / paintState.drawScale;
+          const sy = (vy - paintState.drawY) / paintState.drawScale;
+          return {
+              x: Math.floor(sx),
+              y: Math.floor(sy)
+          };
+      };
+      
+      // ... Event Listeners and Tool Implementations
+      $$('#paintSection .btn[id^="paintTool"]').forEach(btn => {
+        btn.addEventListener('click', () => setActiveTool(btn.id.replace('paintTool', '').toLowerCase()));
+      });
+
+      ui.paintZoom.addEventListener('input', () => {
+        paintState.zoom = parseFloat(ui.paintZoom.value) / 100;
+        ui.paintZoomLabel.textContent = `${ui.paintZoom.value}%`;
+        drawPaintView(getPaintTarget()?.canvas);
+      });
+
+      //... Tool Implementations (fill, erase, blur etc.)
+      const tools = {
+        eyedropper: (tgt, x, y) => {
+          const ctx = tgt.canvas.getContext('2d');
+          const p = ctx.getImageData(x, y, 1, 1).data;
+          const hex = `#${(p[0]<<16 | p[1]<<8 | p[2]).toString(16).padStart(6, '0')}`;
+          ui.paintColor.value = hex;
+        },
+        fill: (tgt, x, y) => {
+          const color = hexToRgb(ui.paintColor.value);
+          const tol = parseInt(ui.paintFillTolerance.value) || 0;
+          const mode = ui.paintFillMode.value;
+          floodFill(tgt.canvas, x, y, { ...color, a: 255 }, tol, mode);
+        },
+        eraser: (tgt, x, y, lastX, lastY) => {
+          const r = parseInt(ui.paintEraserRadius.value) || 10;
+          const ctx = tgt.canvas.getContext('2d');
+          ctx.save();
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.fillStyle = '#000';
+          
+          const dist = Math.hypot(x-lastX, y-lastY);
+          const angle = Math.atan2(y-lastY, x-lastX);
+          for (let i = 0; i < dist; i+= r/2) {
+              const px = lastX + Math.cos(angle) * i;
+              const py = lastY + Math.sin(angle) * i;
+              ctx.beginPath();
+              ctx.arc(px, py, r, 0, Math.PI * 2);
+              ctx.fill();
+          }
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.restore();
+        },
+        blur: (tgt, x, y) => {
+            const r = parseInt(ui.paintBlurRadius.value) || 5;
+            const passes = parseInt(ui.paintBlurPasses.value) || 1;
+            const ctx = tgt.canvas.getContext('2d');
+            const tmpCanvas = document.createElement('canvas');
+            tmpCanvas.width = tgt.canvas.width;
+            tmpCanvas.height = tgt.canvas.height;
+            const tmpCtx = tmpCanvas.getContext('2d');
+            
+            for(let i=0; i<passes; i++){
+                tmpCtx.clearRect(0,0,tmpCanvas.width, tmpCanvas.height);
+                tmpCtx.drawImage(tgt.canvas, 0, 0);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI*2);
+                ctx.clip();
+                ctx.filter = `blur(${r/3}px)`;
+                ctx.drawImage(tmpCanvas, 0, 0);
+                ctx.filter = 'none';
+                ctx.restore();
+            }
+        },
+      };
+
+      const handlePaintAction = (e, isMove = false) => {
+          if (!paintState.isPointerDown && !isMove) return;
+          const tgt = getPaintTarget();
+          if (!tgt) return;
+
+          const rect = ui.paintCanvas.getBoundingClientRect();
+          const p = {
+              x: e.clientX - rect.left,
+              y: e.clientY - rect.top
+          };
+          const coords = viewToImageCoords(p.x, p.y, tgt.canvas);
+          if (!coords || coords.x < 0 || coords.y < 0 || coords.x >= tgt.canvas.width || coords.y >= tgt.canvas.height) return;
+
+          const toolFn = tools[paintState.activeTool];
+          if(toolFn) toolFn(tgt, coords.x, coords.y, paintState.lastX, paintState.lastY);
+
+          paintState.lastX = coords.x;
+          paintState.lastY = coords.y;
+
+          drawPaintView(tgt.canvas);
+          if (tgt.kind === 'gif') rebuildGifThumbnails(tgt.layer);
+      };
+
+      ui.paintCanvas.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        paintState.isPointerDown = true;
+        
+        const tgt = getPaintTarget();
+        if (!tgt) return;
+
+        if(paintState.activeTool !== 'eyedropper') pushPaintUndo(tgt);
+
+        const rect = ui.paintCanvas.getBoundingClientRect();
+        const p = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        const coords = viewToImageCoords(p.x, p.y, tgt.canvas);
+        if(!coords) return;
+        paintState.lastX = coords.x;
+        paintState.lastY = coords.y;
+
+        handlePaintAction(e);
+      });
+      ui.paintCanvas.addEventListener('pointermove', e => {
+        if (!paintState.isPointerDown) return;
+        handlePaintAction(e, true);
+      });
+      const onPointerUp = () => {
+        paintState.isPointerDown = false;
+      };
+      window.addEventListener('pointerup', onPointerUp);
+      
+      // Flood Fill Implementation
+      function floodFill(canvas, x, y, color, tolerance, mode) {
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const { width, height, data } = imageData;
+        const stack = [[x, y]];
+        const startColor = getColorAtPixel(data, width, x, y);
+        const fillColor = [color.r, color.g, color.b, color.a];
+
+        if (colorMatch(startColor, fillColor, 0)) return;
+
+        const visited = new Uint8Array(width * height);
+        
+        if (mode === 'all') {
+            for(let i = 0; i < data.length; i+=4) {
+                const currentPxColor = [data[i], data[i+1], data[i+2], data[i+3]];
+                if (colorMatch(startColor, currentPxColor, tolerance)) {
+                    data.set(fillColor, i);
+                }
+            }
+        } else { // 'connected'
+            while (stack.length) {
+                const [curX, curY] = stack.pop();
+                if (curX < 0 || curX >= width || curY < 0 || curY >= height) continue;
+
+                const offset = (curY * width + curX);
+                if (visited[offset]) continue;
+                
+                const currentColor = getColorAtPixel(data, width, curX, curY);
+
+                if (colorMatch(startColor, currentColor, tolerance)) {
+                    setColorAtPixel(data, width, curX, curY, fillColor);
+                    visited[offset] = 1;
+                    stack.push([curX + 1, curY], [curX - 1, curY], [curX, curY + 1], [curX, curY - 1]);
+                }
+            }
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
+
+      function getColorAtPixel(data, width, x, y) {
+        const i = (y * width + x) * 4;
+        return [data[i], data[i + 1], data[i + 2], data[i + 3]];
+      }
+
+      function setColorAtPixel(data, width, x, y, color) {
+        const i = (y * width + x) * 4;
+        data.set(color, i);
+      }
+      
+      function colorMatch(c1, c2, tol) {
+          return Math.max(Math.abs(c1[0]-c2[0]), Math.abs(c1[1]-c2[1]), Math.abs(c1[2]-c2[2]), Math.abs(c1[3]-c2[3])) <= tol;
+      }
+
+      // Undo/Redo for Paint
+      function pushPaintUndo(target) {
+        if (target.kind === 'gif') {
+          saveGifUndoState(target.layer);
+        } else if (target.kind === 'png') {
+          const { layer } = target;
+          if (!pngPaintHistory.has(layer.id)) pngPaintHistory.set(layer.id, { undo: [], redo: [], max: 20 });
+          const h = pngPaintHistory.get(layer.id);
+          const ctx = target.canvas.getContext('2d');
+          h.undo.push(ctx.getImageData(0, 0, target.canvas.width, target.canvas.height));
+          if (h.undo.length > h.max) h.undo.shift();
+          h.redo.length = 0;
+          resourceManager.pngResources.get(layer.id).dirty = true;
+        }
+        updatePaintUndoUI(target);
+      }
+      
+      ui.paintUndo.onclick = () => {
+        const tgt = getPaintTarget(); if(!tgt) return;
+        if(tgt.kind === 'gif') ui.gifFEUndo.click();
+        else doPngUndo(tgt.layer.id, -1);
+      };
+      ui.paintRedo.onclick = () => {
+        const tgt = getPaintTarget(); if(!tgt) return;
+        if(tgt.kind === 'png') doPngUndo(tgt.layer.id, 1);
+      };
+      
+      ui.paintApplyToPng.onclick = () => {
+        const res = resourceManager.pngResources.get(selectedId);
+        if (res) res.dirty = false;
+        alert('PNGへの変更が適用されました。\n保存するには「PNG保存」または「最適化して保存」を利用してください。');
+      };
+
+      ui.paintRevertPng.onclick = () => {
+        const res = resourceManager.pngResources.get(selectedId);
+        if (res && res.originalImageData) {
+            if (confirm('PNGへのペイント編集をすべて破棄して元の状態に戻しますか？')) {
+                res.canvas.getContext('2d').putImageData(res.originalImageData, 0, 0);
+                res.dirty = false;
+                pngPaintHistory.delete(selectedId);
+                syncPaintPanel();
+            }
+        }
+      };
+
+      function doPngUndo(layerId, dir) {
+        const res = resourceManager.pngResources.get(layerId); if (!res || !res.canvas) return;
+        const h = pngPaintHistory.get(layerId); if (!h) return;
+        const c = res.canvas.getContext('2d');
+        const current = c.getImageData(0,0,res.canvas.width, res.canvas.height);
+
+        if (dir < 0 && h.undo.length) { // Undo
+          const prev = h.undo.pop();
+          h.redo.unshift(current);
+          c.putImageData(prev, 0, 0);
+        } else if (dir > 0 && h.redo.length) { // Redo
+          const next = h.redo.shift();
+          h.undo.push(current);
+          c.putImageData(next, 0, 0);
+        }
+        res.dirty = true;
+        drawPaintView(res.canvas);
+        updatePaintUndoUI({kind:'png', layer: getSelectedLayer()});
+      }
+
+      function updatePaintUndoUI(target) {
+          if (!target) {
+              ui.paintUndo.disabled = true;
+              ui.paintRedo.disabled = true;
+              return;
+          }
+          if (target.kind === 'gif') {
+              const history = gifUndoHistory.get(target.layer.id);
+              ui.paintUndo.disabled = !history || history.length === 0;
+              ui.paintRedo.disabled = true; // GIF redo not implemented in this scope
+          } else { // png
+              const h = pngPaintHistory.get(target.layer.id);
+              ui.paintUndo.disabled = !h || h.undo.length === 0;
+              ui.paintRedo.disabled = !h || h.redo.length === 0;
+          }
+      }
+
+      setActiveTool('eyedropper');
+    })();
+    // === ペイント機能ここまで ===
+
     // 初期状態を記録
     setTimeout(() => {
       undoManager.recordState('初期状態');
