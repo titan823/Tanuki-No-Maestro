@@ -470,18 +470,6 @@
       align-items: center;
       gap: 4px;
     }
-    /* === 追加: カラーコード表示 === */
-    .color-hex-display {
-      display: inline-flex;
-      align-items: center;
-      font-family: monospace;
-      font-size: 12px;
-      padding: 2px 6px;
-      margin-left: 4px;
-      background-color: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-    }
   </style>
 </head>
 <body>
@@ -514,7 +502,7 @@
                         <button id="paintToolFill" class="btn small" title="塗りつぶし (G)">🪣</button>
                         <button id="paintToolEraser" class="btn small" title="消しゴム (E)">🧼</button>
                         <button id="paintToolBlur" class="btn small" title="ぼかし (B)">🌫️</button>
-                        <label>色 <input type="color" id="paintColor" value="#000000"><span id="paintColorHex" class="color-hex-display allow-select">#000000</span></label>
+                        <label>色 <input type="color" id="paintColor" value="#000000"></label>
                         
                         <span id="fillOpts" class="tool-options">
                             <label>許容 <input type="number" id="paintFillTolerance" min="0" max="255" value="20" style="width:60px !important"></label>
@@ -1278,12 +1266,7 @@
           } else if (savedLayer.hasGifResource) {
             restoredLayer.gif = resourceManager.getGifResource(savedLayer.id);
              if (!restoredLayer.gif) {
-              console.warn(`GIF resource not found for layer ${savedLayer.id}`);
-              return null;
-            }
-          }
-          
-             if (!restoredLayer.gif) {
+
               console.warn(`GIF resource not found for layer ${savedLayer.id}`);
               return null;
             }
@@ -1471,7 +1454,6 @@
       fillOpts: $('#fillOpts'),
       eraserOpts: $('#eraserOpts'),
       blurOpts: $('#blurOpts'),
-      paintColorHex: $('#paintColorHex'),
     };
     const gifFEState = { idx: 0 };
     const gifUndoHistory = new Map();
@@ -3488,12 +3470,6 @@
         drawX: 0, drawY: 0, drawScale: 1.0,
       };
 
-      function updateHexDisplay() {
-        if (ui.paintColorHex) {
-          ui.paintColorHex.textContent = ui.paintColor.value.toUpperCase();
-        }
-      }
-
       function setActiveTool(toolName) {
         paintState.activeTool = toolName;
         ['Eyedropper', 'Fill', 'Eraser', 'Blur'].forEach(t => {
@@ -3606,7 +3582,6 @@
           const p = ctx.getImageData(x, y, 1, 1).data;
           const hex = `#${(p[0]<<16 | p[1]<<8 | p[2]).toString(16).padStart(6, '0')}`;
           ui.paintColor.value = hex;
-          updateHexDisplay();
         },
         fill: (tgt, x, y) => {
           const color = hexToRgb(ui.paintColor.value);
@@ -3846,11 +3821,8 @@
               ui.paintRedo.disabled = !h || h.redo.length === 0;
           }
       }
-      
-      ui.paintColor.addEventListener('input', updateHexDisplay);
-      
+
       setActiveTool('eyedropper');
-      updateHexDisplay();
     })();
     // === ペイント機能ここまで ===
 
