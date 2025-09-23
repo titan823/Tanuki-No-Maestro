@@ -1,501 +1,447 @@
-// src/App.js
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodePalette - Live Web Editor</title>
+    
+    <!-- CodeMirrorのCSSとJSをCDNから読み込む -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
 
-// --- 1. 必要なライブラリのインポート ---
-import React, { useState, useRef, useCallback } from 'react';
-import styled, { createGlobalStyle } from 'styled-components';
-import { debounce } from 'lodash';
-import Editor from '@monaco-editor/react';
-import { SketchPicker } from 'react-color';
-import postcss from 'postcss';
+    <style>
+        /* --- アプリ全体のスタイル --- */
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        header {
+            background-color: #333;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-bottom: 2px solid #007acc;
+        }
+        .main-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+        .panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .code-panel {
+            flex: 1;
+            min-width: 400px;
+        }
+        .preview-inspector-panel {
+            flex: 1;
+            border-left: 2px solid #444;
+        }
+        .preview-panel {
+            flex-grow: 1;
+            height: 65%;
+        }
+        .inspector-panel {
+            height: 35%;
+            background-color: #252526;
+            border-top: 2px solid #444;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        .panel-header {
+            background-color: #333;
+            padding: 8px 12px;
+            font-weight: bold;
+        }
 
+        /* --- コードエディタ関連のスタイル --- */
+        .code-tabs {
+            display: flex;
+            background-color: #1e1e1e;
+        }
+        .tab-button {
+            padding: 10px 15px;
+            border: none;
+            background-color: #2d2d2d;
+            color: #ccc;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-button.active {
+            background-color: #333;
+            color: white;
+            border-bottom: 3px solid #007acc;
+        }
+        .editor-container {
+            flex-grow: 1;
+            position: relative;
+        }
+        .CodeMirror {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100% !important;
+            font-size: 14px;
+        }
+        .editor-wrapper {
+            display: none;
+            height: 100%;
+        }
+        .editor-wrapper.active {
+            display: block;
+        }
 
-// --- 2. グローバルスタイルの定義 (旧 index.css) ---
-const GlobalStyle = createGlobalStyle`
-  html, body, #root {
-    height: 100%;
+        /* --- プレビューエリアのスタイル --- */
+        #preview-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: #fff;
+        }
+
+        /* --- インスペクターのスタイル --- */
+        .inspector-panel h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+        .inspector-item {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .inspector-item label {
+            width: 120px;
+            font-size: 0.9em;
+        }
+        .inspector-item input[type="text"], .inspector-item input[type="color"] {
+            background-color: #3c3c3c;
+            border: 1px solid #555;
+            color: #f0f0f0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <header>CodePalette</header>
+    <main class="main-container">
+        <!-- 左側: コードパネル -->
+        <div class="panel code-panel">
+            <div class="code-tabs">
+                <button class="tab-button active" onclick="showEditor('html')">HTML</button>
+                <button class="tab-button" onclick="showEditor('css')">CSS</button>
+                <button class="tab-button" onclick="showEditor('js')">JavaScript</button>
+            </div>
+            <div class="editor-container">
+                <div id="html-editor-wrapper" class="editor-wrapper active">
+                    <textarea id="html-code"></textarea>
+                </div>
+                <div id="css-editor-wrapper" class="editor-wrapper">
+                    <textarea id="css-code"></textarea>
+                </div>
+                <div id="js-editor-wrapper" class="editor-wrapper">
+                    <textarea id="js-code"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側: プレビュー&インスペクターパネル -->
+        <div class="panel preview-inspector-panel">
+            <div class="preview-panel">
+                <div class="panel-header">Preview</div>
+                <iframe id="preview-frame"></iframe>
+            </div>
+            <div class="inspector-panel">
+                <div class="panel-header">Inspector</div>
+                <div id="inspector-content">
+                    <p id="inspector-placeholder">Click on an element in the preview to inspect it.</p>
+                    <div id="inspector-ui" style="display: none;">
+                        <div class="inspector-item">
+                            <label>Selector</label>
+                            <b id="selected-element-selector"></b>
+                        </div>
+                        <div class="inspector-item">
+                            <label for="color">Text Color</label>
+                            <input type="color" id="inspector-color">
+                        </div>
+                        <div class="inspector-item">
+                            <label for="bgColor">Background</label>
+                            <input type="color" id="inspector-bgColor">
+                        </div>
+                        <div class="inspector-item">
+                            <label for="padding">Padding</label>
+                            <input type="text" id="inspector-padding" placeholder="e.g., 10px or 5px 10px">
+                        </div>
+                        <div class="inspector-item">
+                            <label for="margin">Margin</label>
+                            <input type="text" id="inspector-margin" placeholder="e.g., 10px auto">
+                        </div>
+                         <div class="inspector-item">
+                            <label for="fontSize">Font Size</label>
+                            <input type="text" id="inspector-fontSize" placeholder="e.g., 16px">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- グローバル変数 ---
+            let selectedElement = null;
+            let lastHighlightedElement = null;
+
+            // --- CodeMirrorエディタの初期化 ---
+            const htmlEditor = CodeMirror.fromTextArea(document.getElementById('html-code'), {
+                mode: 'xml',
+                htmlMode: true,
+                theme: 'material-darker',
+                lineNumbers: true,
+            });
+            const cssEditor = CodeMirror.fromTextArea(document.getElementById('css-code'), {
+                mode: 'css',
+                theme: 'material-darker',
+                lineNumbers: true,
+            });
+            const jsEditor = CodeMirror.fromTextArea(document.getElementById('js-code'), {
+                mode: 'javascript',
+                theme: 'material-darker',
+                lineNumbers: true,
+            });
+
+            // --- 初期コードの設定 ---
+            const initialHTML = `<!DOCTYPE html>
+<html>
+<head>
+    <title>My App</title>
+</head>
+<body>
+    <div class="container">
+        <h1 id="main-title">Welcome to CodePalette!</h1>
+        <p>You can edit this content.</p>
+        <button id="action-btn">Click Me</button>
+    </div>
+</body>
+</html>`;
+            const initialCSS = `body {
+    font-family: sans-serif;
+    background-color: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
     margin: 0;
-    padding: 0;
-    overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  }
-
-  /* スクロールバーのスタイル */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #282c34;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #555;
-    border-radius: 4px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #777;
-  }
-`;
-
-
-// --- 3. ユーティリティ関数の定義 ---
-
-/**
- * (旧 selectorGenerator.js)
- * DOM要素から一意で安定したCSSセレクタを生成する
- */
-const getUniqueCssSelector = (el, doc) => {
-  if (!(el instanceof HTMLElement)) return '';
-  if (el.id) {
-    const selector = `#${el.id}`;
-    if (doc.querySelectorAll(selector).length === 1) return selector;
-  }
-  if (el.classList.length > 0) {
-    for (const className of el.classList) {
-      const selector = `.${className}`;
-      if (doc.querySelectorAll(selector).length === 1) return `${el.tagName.toLowerCase()}${selector}`;
-    }
-  }
-  const path = [];
-  let current = el;
-  while (current && current.parentElement) {
-    let selectorPart = current.tagName.toLowerCase();
-    let sibling = current;
-    let nth = 1;
-    while (sibling.previousElementSibling) {
-      sibling = sibling.previousElementSibling;
-      if (sibling.tagName === current.tagName) nth++;
-    }
-    const nextSibling = current.nextElementSibling;
-    let hasSimilarSibling = false;
-    if (nextSibling) {
-      let tempSibling = current.parentElement.firstElementChild;
-      while(tempSibling) {
-        if(tempSibling.tagName === current.tagName && tempSibling !== current) {
-            hasSimilarSibling = true;
-            break;
-        }
-        tempSibling = tempSibling.nextElementSibling;
-      }
-    }
-    if (nth > 1 || hasSimilarSibling) selectorPart += `:nth-of-type(${nth})`;
-    path.unshift(selectorPart);
-    if (current.parentElement.tagName === 'BODY') break;
-    current = current.parentElement;
-  }
-  return path.join(' > ');
-};
-
-/**
- * (旧 cssProcessor.js)
- * PostCSSを使用してCSSコード文字列を安全に更新する
- */
-const updateCssCode = (originalCss, selector, property, value) => {
-  const kebabCaseProperty = property.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
-  try {
-    const root = postcss.parse(originalCss);
-    let ruleFound = false;
-    root.walkRules(new RegExp(`^${selector.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`), (rule) => {
-      ruleFound = true;
-      let declarationFound = false;
-      rule.walkDecls(kebabCaseProperty, (decl) => {
-        decl.value = value;
-        declarationFound = true;
-      });
-      if (!declarationFound) rule.append({ prop: kebabCaseProperty, value: value });
-    });
-    if (!ruleFound) {
-      const newRule = postcss.rule({ selector: selector });
-      newRule.append({ prop: kebabCaseProperty, value: value });
-      root.append(newRule);
-    }
-    return root.toString();
-  } catch (error) {
-    console.error("PostCSS parsing error:", error);
-    return originalCss;
-  }
-};
-
-
-// --- 4. サブコンポーネントの定義 ---
-
-/**
- * (旧 CodeEditor.js)
- * Monaco Editorをラップするコンポーネント
- */
-const CodeEditor = ({ language, value, onChange }) => {
-  const EditorWrapper = styled.div` flex: 1; `;
-  return (
-    <EditorWrapper>
-      <Editor
-        height="100%"
-        language={language}
-        value={value}
-        onChange={onChange}
-        theme="vs-dark"
-        options={{
-          minimap: { enabled: false },
-          fontSize: 14,
-          wordWrap: 'on',
-          scrollBeyondLastLine: false,
-          automaticLayout: true,
-        }}
-      />
-    </EditorWrapper>
-  );
-};
-
-/**
- * (旧 IframePreview.js)
- * コードを<iframe>内にレンダリングし、要素選択イベントをハンドリング
- */
-const IframePreview = ({ htmlCode, cssCode, jsCode, onElementSelected, iframeRef }) => {
-  const [highlight, setHighlight] = useState(null);
-  const srcDoc = `
-    <!DOCTYPE html><html><head><style>${cssCode}</style></head>
-    <body>${htmlCode}<script>try { ${jsCode} } catch (e) { console.error(e); }</script></body></html>
-  `;
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    const handleLoad = () => {
-      const doc = iframe.contentDocument;
-      if (!doc) return;
-      const clickHandler = (event) => {
-        event.preventDefault(); event.stopPropagation();
-        const target = event.target;
-        if (target && target !== doc.body && target !== doc.documentElement) {
-          const rect = target.getBoundingClientRect();
-          setHighlight({
-            top: rect.top + iframe.contentWindow.scrollY,
-            left: rect.left + iframe.contentWindow.scrollX,
-            width: rect.width,
-            height: rect.height,
-          });
-          onElementSelected(target, doc);
-        } else {
-          setHighlight(null); onElementSelected(null, null);
-        }
-      };
-      doc.body.addEventListener('click', clickHandler, true);
-      return () => doc.body.removeEventListener('click', clickHandler, true);
-    };
-    iframe.addEventListener('load', handleLoad);
-    return () => iframe.removeEventListener('load', handleLoad);
-  }, [htmlCode, cssCode, jsCode, onElementSelected, iframeRef]);
-
-  const IframeWrapper = styled.div` flex: 1; background-color: white; overflow: auto; position: relative; `;
-  const StyledIframe = styled.iframe` width: 100%; height: 100%; border: none; `;
-  const HighlightBox = styled.div` position: absolute; border: 2px solid #00aeff; background-color: rgba(0, 174, 255, 0.25); pointer-events: none; z-index: 9999; transition: all 0.05s ease-out; box-sizing: border-box; `;
-
-  return (
-    <IframeWrapper>
-      <StyledIframe ref={iframeRef} srcDoc={srcDoc} title="preview" sandbox="allow-scripts allow-same-origin" />
-      {highlight && <HighlightBox style={{ top: `${highlight.top}px`, left: `${highlight.left}px`, width: `${highlight.width}px`, height: `${highlight.height}px` }} />}
-    </IframeWrapper>
-  );
-};
-
-/**
- * (旧 StyleEditorPanel.js)
- * 選択された要素のスタイルを編集するUIパネル
- */
-const StyleEditorPanel = ({ selector, styles, onStyleChange }) => {
-  const [colorPicker, setColorPicker] = useState({ visible: false, property: '' });
-  const handleColorChange = (color) => onStyleChange(colorPicker.property, color.hex);
-  const openColorPicker = (property) => setColorPicker({ visible: true, property });
-  const closeColorPicker = () => setColorPicker({ visible: false, property: '' });
-  
-  if (!selector) return <Panel><p>Select an element in the preview to begin editing.</p></Panel>;
-
-  const toKebabCase = (str) => str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
-  
-  const renderColorInput = (property) => (
-    <FieldGroup>
-      <Label>{toKebabCase(property)}</Label>
-      <ColorDisplay style={{ backgroundColor: styles[property] }} onClick={() => openColorPicker(property)} />
-      {colorPicker.visible && colorPicker.property === property && (
-        <Popover><Cover onClick={closeColorPicker} /><SketchPicker color={styles[property]} onChange={handleColorChange} /></Popover>
-      )}
-    </FieldGroup>
-  );
-
-  const renderUnitInput = (property) => (
-    <FieldGroup>
-      <Label>{toKebabCase(property)}</Label>
-      <Input type="text" value={styles[property] || ''} onChange={(e) => onStyleChange(property, e.target.value)} />
-    </FieldGroup>
-  );
-  
-  const renderSelectInput = (property, options) => (
-    <FieldGroup>
-      <Label>{toKebabCase(property)}</Label>
-      <Select value={styles[property]} onChange={(e) => onStyleChange(property, e.target.value)}>
-        {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-      </Select>
-    </FieldGroup>
-  );
-
-  return (
-    <Panel>
-      <SectionTitle>{selector}</SectionTitle>
-      <CategoryTitle>Layout</CategoryTitle>
-      {renderSelectInput('display', ['block', 'inline-block', 'flex', 'grid', 'inline', 'none'])}
-      {styles.display === 'flex' && (
-        <>
-          <CategoryTitle>Flexbox</CategoryTitle>
-          {renderSelectInput('flexDirection', ['row', 'row-reverse', 'column', 'column-reverse'])}
-          {renderSelectInput('justifyContent', ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly'])}
-          {renderSelectInput('alignItems', ['stretch', 'flex-start', 'flex-end', 'center', 'baseline'])}
-        </>
-      )}
-      <CategoryTitle>Sizing</CategoryTitle>
-      {renderUnitInput('width')}{renderUnitInput('height')}
-      <CategoryTitle>Spacing</CategoryTitle>
-      {renderUnitInput('marginTop')}{renderUnitInput('marginRight')}{renderUnitInput('marginBottom')}{renderUnitInput('marginLeft')}
-      {renderUnitInput('paddingTop')}{renderUnitInput('paddingRight')}{renderUnitInput('paddingBottom')}{renderUnitInput('paddingLeft')}
-      <CategoryTitle>Appearance</CategoryTitle>
-      {renderColorInput('color')}{renderColorInput('backgroundColor')}{renderUnitInput('borderRadius')}
-      <CategoryTitle>Typography</CategoryTitle>
-      {renderUnitInput('fontSize')}
-    </Panel>
-  );
-};
-
-
-// --- 5. メイン App コンポーネント ---
-
-// 初期コードデータ
-const initialHtml = `
-<div class="container">
-  <h1>Real-time Web Editor</h1>
-  <p id="my-paragraph">Click any element to inspect and edit its styles.</p>
-  <div class="button-group">
-    <button class="my-button primary">Primary</button>
-    <button class="my-button secondary">Secondary</button>
-  </div>
-  <div class="flex-container">
-    <div class="flex-item">1</div>
-    <div class="flex-item">2</div>
-    <div class="flex-item">3</div>
-  </div>
-</div>
-`;
-
-const initialCss = `
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  margin: 0;
-  padding: 20px;
-  background-color: #f4f7f9;
-  color: #333;
 }
 
 .container {
-  max-width: 900px;
-  margin: 20px auto;
-  padding: 30px;
-  background-color: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    padding: 40px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
-h1 {
-  color: #1a202c;
-  text-align: center;
-  font-size: 2em;
+#main-title {
+    color: #333;
 }
 
-#my-paragraph {
-  color: #4a5568;
-  line-height: 1.6;
-  text-align: center;
-  margin-bottom: 30px;
-}
+#action-btn {
+    background-color: #007acc;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+}`;
+            const initialJS = `document.getElementById('action-btn').addEventListener('click', () => {
+    alert('Button was clicked!');
+});`;
 
-.button-group {
-  text-align: center;
-  margin-bottom: 30px;
-}
+            htmlEditor.setValue(initialHTML);
+            cssEditor.setValue(initialCSS);
+            jsEditor.setValue(initialJS);
+            
+            // --- プレビュー更新機能 ---
+            function updatePreview() {
+                const previewFrame = document.getElementById('preview-frame');
+                const preview =  previewFrame.contentDocument ||  previewFrame.contentWindow.document;
 
-.my-button {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 10px;
-  transition: all 0.2s ease-in-out;
-}
+                const htmlCode = htmlEditor.getValue();
+                const cssCode = cssEditor.getValue();
+                const jsCode = jsEditor.getValue();
 
-.primary {
-  background-color: #4299e1;
-  color: white;
-}
-.primary:hover {
-  background-color: #2b6cb0;
-  transform: translateY(-2px);
-}
+                preview.open();
+                preview.write(`
+                    <html>
+                        <head>
+                            <style>${cssCode}</style>
+                        </head>
+                        <body>
+                            ${htmlCode}
+                            <script>${jsCode}<\/script>
+                        </body>
+                    </html>
+                `);
+                preview.close();
 
-.secondary {
-  background-color: #e2e8f0;
-  color: #2d3748;
-}
-.secondary:hover {
-  background-color: #cbd5e0;
-  transform: translateY(-2px);
-}
+                // プレビューが更新されたら、インスペクター用のイベントリスナーを再設定
+                setupInspectorListeners();
+            }
 
-.flex-container {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  background-color: #edf2f7;
-  padding: 20px;
-  border-radius: 8px;
-  min-height: 150px;
-}
+            // --- エディタ変更時のイベントリスナー ---
+            htmlEditor.on('change', updatePreview);
+            cssEditor.on('change', updatePreview);
+            jsEditor.on('change', updatePreview);
 
-.flex-item {
-  width: 80px;
-  height: 80px;
-  background-color: #90cdf4;
-  color: #1a365d;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 24px;
-  font-weight: bold;
-  border-radius: 8px;
-}
-`;
+            // --- タブ切り替え機能 ---
+            window.showEditor = function(editorName) {
+                document.querySelectorAll('.editor-wrapper').forEach(w => w.classList.remove('active'));
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
 
-const initialJs = `
-document.addEventListener('DOMContentLoaded', () => {
-  const buttons = document.querySelectorAll('.my-button');
-  buttons.forEach(button => {
-    button.addEventListener('click', () => {
-      const type = button.classList.contains('primary') ? 'Primary' : 'Secondary';
-      alert(type + ' button clicked!');
-    });
-  });
-});
-`;
+                document.getElementById(`${editorName}-editor-wrapper`).classList.add('active');
+                document.querySelector(`.tab-button[onclick="showEditor('${editorName}')"]`).classList.add('active');
+                
+                // CodeMirrorは表示/非表示の切り替え後にリフレッシュが必要
+                if (editorName === 'html') htmlEditor.refresh();
+                if (editorName === 'css') cssEditor.refresh();
+                if (editorName === 'js') jsEditor.refresh();
+            }
+            
+            // --- インスペクター機能 ---
+            function setupInspectorListeners() {
+                const previewBody = document.getElementById('preview-frame').contentWindow.document.body;
+                if (!previewBody) return;
 
-function App() {
-  const [htmlCode, setHtmlCode] = useState(initialHtml);
-  const [cssCode, setCssCode] = useState(initialCss);
-  const [jsCode, setJsCode] = useState(initialJs);
-  const [activeTab, setActiveTab] = useState('html');
-  const [selectedElement, setSelectedElement] = useState(null);
-  const [selectedElementSelector, setSelectedElementSelector] = useState('');
-  const [selectedElementComputedStyles, setSelectedElementComputedStyles] = useState({});
-  const iframeRef = useRef(null);
+                previewBody.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
 
-  const debouncedSetHtmlCode = useCallback(debounce(setHtmlCode, 300), []);
-  const debouncedSetCssCode = useCallback(debounce(setCssCode, 300), []);
-  const debouncedSetJsCode = useCallback(debounce(setJsCode, 300), []);
+                    // 以前のハイライトを削除
+                    if (lastHighlightedElement) {
+                        lastHighlightedElement.style.outline = '';
+                    }
 
-  const handleEditorChange = (value, language) => {
-    if (language === 'html') debouncedSetHtmlCode(value);
-    if (language === 'css') debouncedSetCssCode(value);
-    if (language === 'javascript') debouncedSetJsCode(value);
-  };
+                    selectedElement = e.target;
+                    
+                    // 新しい要素をハイライト
+                    selectedElement.style.outline = '2px solid #007acc';
+                    lastHighlightedElement = selectedElement;
 
-  const handleElementSelected = (element, iframeDocument) => {
-    setSelectedElement(element);
-    if (element) {
-      const selector = getUniqueCssSelector(element, iframeDocument);
-      setSelectedElementSelector(selector);
-      const computedStyles = iframeDocument.defaultView.getComputedStyle(element);
-      const styles = {};
-      const propertiesToExtract = [
-        'color', 'backgroundColor', 'width', 'height', 'fontSize',
-        'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-        'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
-        'borderRadius', 'border',
-        'display', 'flexDirection', 'justifyContent', 'alignItems'
-      ];
-      propertiesToExtract.forEach(prop => { styles[prop] = computedStyles[prop]; });
-      setSelectedElementComputedStyles(styles);
-    } else {
-      setSelectedElementSelector('');
-      setSelectedElementComputedStyles({});
-    }
-  };
+                    populateInspector(selectedElement);
+                });
+            }
 
-  const handleStyleChange = (property, value) => {
-    if (!selectedElement || !selectedElementSelector) return;
-    selectedElement.style[property] = value;
-    const newCss = updateCssCode(cssCode, selectedElementSelector, property, value);
-    setCssCode(newCss);
-    const computedStyles = iframeRef.current.contentWindow.getComputedStyle(selectedElement);
-    setSelectedElementComputedStyles(prev => ({ ...prev, [property]: computedStyles[property] }));
-  };
-  
-  const handleReset = () => {
-    if (window.confirm('Are you sure you want to reset all code?')) {
-      setHtmlCode(initialHtml); setCssCode(initialCss); setJsCode(initialJs);
-      setSelectedElement(null); setSelectedElementSelector(''); setSelectedElementComputedStyles({});
-    }
-  };
-
-  return (
-    <>
-      <GlobalStyle />
-      <Container>
-        <Header>
-          <h1>Web Editor Pro</h1>
-          <Button onClick={handleReset}>Reset All</Button>
-        </Header>
-        <MainContent>
-          <EditorColumn>
-            <Tabs>
-              <Tab active={activeTab === 'html'} onClick={() => setActiveTab('html')}>HTML</Tab>
-              <Tab active={activeTab === 'css'} onClick={() => setActiveTab('css')}>CSS</Tab>
-              <Tab active={activeTab === 'js'} onClick={() => setActiveTab('js')}>JS</Tab>
-            </Tabs>
-            <CodeEditor
-              language={activeTab}
-              value={ activeTab === 'html' ? htmlCode : activeTab === 'css' ? cssCode : jsCode }
-              onChange={(value) => handleEditorChange(value, activeTab === 'js' ? 'javascript' : activeTab)}
-            />
-          </EditorColumn>
-          <PreviewColumn>
-            <IframePreview {...{ htmlCode, cssCode, jsCode, onElementSelected, iframeRef }} />
-          </PreviewColumn>
-          <StylePanelColumn>
-            <StyleEditorPanel {...{ selector: selectedElementSelector, styles: selectedElementComputedStyles, onStyleChange: handleStyleChange }} />
-          </StylePanelColumn>
-        </MainContent>
-      </Container>
-    </>
-  );
-}
+            function getCssSelector(el) {
+                if (!(el instanceof Element)) return;
+                let path = [];
+                while (el.nodeType === Node.ELEMENT_NODE) {
+                    let selector = el.nodeName.toLowerCase();
+                    if (el.id) {
+                        selector = '#' + el.id;
+                        path.unshift(selector);
+                        break; // IDがあればそれが一番確実なのでループを抜ける
+                    } else {
+                        let sib = el, nth = 1;
+                        while (sib = sib.previousElementSibling) {
+                            if (sib.nodeName.toLowerCase() == selector)
+                                nth++;
+                        }
+                        if (nth != 1)
+                            selector += ":nth-of-type("+nth+")";
+                    }
+                    path.unshift(selector);
+                    el = el.parentNode;
+                }
+                return path.join(" > ");
+            }
 
 
-// --- 6. Styled Components の定義 ---
-const Container = styled.div` display: flex; flex-direction: column; height: 100vh; background-color: #282c34; `;
-const Header = styled.header` display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background-color: #20232a; color: #61dafb; border-bottom: 1px solid #444; h1 { margin: 0; font-size: 1.4em; } `;
-const Button = styled.button` background-color: #61dafb; color: #20232a; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: background-color 0.2s; &:hover { background-color: #21a1f1; } `;
-const MainContent = styled.div` display: flex; flex: 1; overflow: hidden; `;
-const EditorColumn = styled.div` flex: 2; display: flex; flex-direction: column; min-width: 300px; `;
-const PreviewColumn = styled.div` flex: 3; display: flex; flex-direction: column; border-left: 1px solid #444; border-right: 1px solid #444; `;
-const StylePanelColumn = styled.div` flex: 1.5; min-width: 280px; background-color: #282c34; overflow-y: auto; `;
-const Tabs = styled.div` display: flex; background-color: #20232a; `;
-const Tab = styled.button` padding: 12px 18px; border: none; background-color: ${props => (props.active ? '#282c34' : 'transparent')}; color: ${props => (props.active ? '#61dafb' : '#ccc')}; cursor: pointer; font-size: 1em; outline: none; border-bottom: 2px solid ${props => (props.active ? '#61dafb' : 'transparent')}; transition: all 0.2s ease-in-out; &:hover { color: #61dafb; } `;
-// StyleEditorPanel内コンポーネント
-const Panel = styled.div` padding: 20px; color: #e0e0e0; height: 100%; box-sizing: border-box; `;
-const SectionTitle = styled.h3` margin-top: 0; color: #61dafb; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.1em; word-break: break-all; `;
-const CategoryTitle = styled.h4` color: #ccc; margin-top: 24px; margin-bottom: 12px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.5px; `;
-const FieldGroup = styled.div` margin-bottom: 15px; `;
-const Label = styled.label` display: block; margin-bottom: 6px; font-size: 0.9em; color: #aaa; `;
-const Input = styled.input` width: 100%; padding: 8px; border: 1px solid #555; border-radius: 4px; font-size: 0.9em; background-color: #333; color: #eee; box-sizing: border-box; `;
-const Select = styled.select` width: 100%; padding: 8px; border: 1px solid #555; border-radius: 4px; font-size: 0.9em; background-color: #333; color: #eee; `;
-const ColorDisplay = styled.div` width: 100%; height: 30px; border: 1px solid #555; border-radius: 4px; cursor: pointer; margin-top: 5px; `;
-const Popover = styled.div` position: absolute; z-index: 10; `;
-const Cover = styled.div` position: fixed; top: 0; right: 0; bottom: 0; left: 0; `;
+            function populateInspector(element) {
+                document.getElementById('inspector-placeholder').style.display = 'none';
+                document.getElementById('inspector-ui').style.display = 'block';
+
+                const styles = window.getComputedStyle(element);
+
+                document.getElementById('selected-element-selector').textContent = getCssSelector(element);
+                document.getElementById('inspector-color').value = rgbToHex(styles.color);
+                document.getElementById('inspector-bgColor').value = rgbToHex(styles.backgroundColor);
+                document.getElementById('inspector-padding').value = styles.padding;
+                document.getElementById('inspector-margin').value = styles.margin;
+                document.getElementById('inspector-fontSize').value = styles.fontSize;
+            }
+
+            // --- インスペクターでの変更をCSSコードに反映 ---
+            function applyStyleChange(property, value) {
+                if (!selectedElement) return;
+
+                // 1. プレビューに即時反映
+                selectedElement.style[property] = value;
+
+                // 2. CSSコードに反映（これがこのアプリの核）
+                const selector = getCssSelector(selectedElement);
+                let cssCode = cssEditor.getValue();
+                
+                // CSSのプロパティ名をケバブケースに変換 (e.g., backgroundColor -> background-color)
+                const cssProperty = property.replace(/([A-Z])/g, '-$1').toLowerCase();
+
+                // セレクタのルールを見つけるための正規表現
+                const regex = new RegExp(`(${selector.replace(/[\/\\^$*+?.()|[\]{}]/g, '\\$&')})\\s*\\{([^}]*)\\}`, 's');
+                const match = cssCode.match(regex);
+                
+                if (match) { // 既存のルールがある場合
+                    let properties = match[2];
+                    const propRegex = new RegExp(`(^|;)\\s*${cssProperty}\\s*:[^;]+`, 'i');
+                    if (propRegex.test(properties)) {
+                        // プロパティが既にあれば値を置換
+                        const newProperties = properties.replace(propRegex, `$1 ${cssProperty}: ${value}`);
+                        cssCode = cssCode.replace(match[0], `${selector} {${newProperties}}`);
+                    } else {
+                        // プロパティがなければ追加
+                        const newProperties = properties.trim() + (properties.trim().endsWith(';') ? '' : ';') + ` ${cssProperty}: ${value}; `;
+                        cssCode = cssCode.replace(match[0], `${selector} {\n${newProperties}\n}`);
+                    }
+                } else { // 既存のルールがない場合
+                    // 新しいルールをCSSの末尾に追加
+                    cssCode += `\n\n${selector} {\n    ${cssProperty}: ${value};\n}`;
+                }
+                
+                cssEditor.setValue(cssCode);
+            }
+
+            // インスペクターの入力欄にイベントリスナーを追加
+            document.getElementById('inspector-color').addEventListener('input', (e) => applyStyleChange('color', e.target.value));
+            document.getElementById('inspector-bgColor').addEventListener('input', (e) => applyStyleChange('backgroundColor', e.target.value));
+            document.getElementById('inspector-padding').addEventListener('change', (e) => applyStyleChange('padding', e.target.value));
+            document.getElementById('inspector-margin').addEventListener('change', (e) => applyStyleChange('margin', e.target.value));
+            document.getElementById('inspector-fontSize').addEventListener('change', (e) => applyStyleChange('fontSize', e.target.value));
 
 
-// --- 7. App コンポーネントのエクスポート ---
-export default App;
+            // ヘルパー関数: rgb(r, g, b)を#rrggbbに変換
+            function rgbToHex(rgb) {
+                if (!rgb || rgb.indexOf('rgb') === -1) return '#000000';
+                let [r, g, b] = rgb.match(/\d+/g).map(Number);
+                return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+            }
+
+            // --- 初期プレビューの描画 ---
+            updatePreview();
+        });
+    </script>
+</body>
+</html>
