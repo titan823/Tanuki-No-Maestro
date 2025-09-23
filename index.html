@@ -1,562 +1,71 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual Web Editor</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+/**
+ * DOM要素から一意で安定したCSSセレクタを生成する
+ * 優先順位: ID > 一意のクラス > タグ+クラス > nth-of-typeパス
+ * @param {HTMLElement} el - 対象のDOM要素
+ * @param {Document} doc - 要素が存在するドキュメント (iframeのdocument)
+ * @returns {string} 生成されたCSSセレクタ
+ */
+export const getUniqueCssSelector = (el, doc) => {
+  if (!(el instanceof HTMLElement)) return '';
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            height: 100vh;
-            overflow: hidden;
-            background: #1e1e1e;
-        }
+  // 1. IDセレクタ (最も優先)
+  if (el.id) {
+    const selector = `#${el.id}`;
+    if (doc.querySelectorAll(selector).length === 1) {
+      return selector;
+    }
+  }
 
-        .container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 60px 1fr 300px;
-            height: 100vh;
-            gap: 1px;
-            background: #2d2d30;
-        }
+  // 2. クラスセレクタ (一意なものがあれば優先)
+  if (el.classList.length > 0) {
+    for (const className of el.classList) {
+      const selector = `.${className}`;
+      if (doc.querySelectorAll(selector).length === 1) {
+        return `${el.tagName.toLowerCase()}${selector}`;
+      }
+    }
+  }
 
-        .header {
-            grid-column: 1 / -1;
-            background: #2d2d30;
-            display: flex;
-            align-items: center;
-            padding: 0 20px;
-            border-bottom: 1px solid #3e3e42;
-        }
-
-        .header h1 {
-            color: #fff;
-            font-size: 20px;
-            margin-right: auto;
-        }
-
-        .tab-container {
-            display: flex;
-            gap: 10px;
-            margin-right: 20px;
-        }
-
-        .tab {
-            padding: 8px 16px;
-            background: #3e3e42;
-            color: #ccc;
-            border: none;
-            cursor: pointer;
-            border-radius: 4px 4px 0 0;
-            transition: all 0.3s;
-        }
-
-        .tab.active {
-            background: #007acc;
-            color: white;
-        }
-
-        .editor-panel {
-            background: #1e1e1e;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .preview-panel {
-            background: white;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .preview-frame {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-
-        .properties-panel {
-            grid-column: 1 / -1;
-            background: #252526;
-            padding: 20px;
-            overflow-y: auto;
-            border-top: 1px solid #3e3e42;
-        }
-
-        .property-group {
-            margin-bottom: 20px;
-        }
-
-        .property-group h3 {
-            color: #ccc;
-            margin-bottom: 10px;
-            font-size: 14px;
-            text-transform: uppercase;
-        }
-
-        .property-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-            gap: 10px;
-        }
-
-        .property-item label {
-            color: #aaa;
-            width: 120px;
-            font-size: 13px;
-        }
-
-        .property-item input,
-        .property-item select {
-            flex: 1;
-            padding: 5px;
-            background: #3e3e42;
-            border: 1px solid #555;
-            color: #fff;
-            border-radius: 3px;
-        }
-
-        .CodeMirror {
-            flex: 1;
-            font-size: 14px;
-        }
-
-        .element-selector {
-            position: absolute;
-            border: 2px solid #007acc;
-            pointer-events: none;
-            z-index: 9999;
-            display: none;
-        }
-
-        .element-label {
-            position: absolute;
-            background: #007acc;
-            color: white;
-            padding: 2px 6px;
-            font-size: 11px;
-            top: -20px;
-            left: 0;
-            white-space: nowrap;
-        }
-
-        .toolbar {
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn {
-            padding: 6px 12px;
-            background: #007acc;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .btn:hover {
-            background: #005a9e;
-        }
-
-        .resize-handle {
-            width: 4px;
-            background: #3e3e42;
-            cursor: col-resize;
-            position: relative;
-        }
-
-        .resize-handle:hover {
-            background: #007acc;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Visual Web Editor</h1>
-            <div class="tab-container">
-                <button class="tab active" data-tab="html">HTML</button>
-                <button class="tab" data-tab="css">CSS</button>
-                <button class="tab" data-tab="js">JavaScript</button>
-            </div>
-            <div class="toolbar">
-                <button class="btn" id="runBtn">▶ Run</button>
-                <button class="btn" id="clearBtn">Clear</button>
-                <button class="btn" id="downloadBtn">Download</button>
-            </div>
-        </div>
-
-        <div class="editor-panel">
-            <textarea id="codeEditor"></textarea>
-        </div>
-
-        <div class="preview-panel">
-            <iframe class="preview-frame" id="preview"></iframe>
-            <div class="element-selector" id="elementSelector">
-                <div class="element-label" id="elementLabel"></div>
-            </div>
-        </div>
-
-        <div class="properties-panel">
-            <div class="property-group">
-                <h3>選択要素: <span id="selectedElement">なし</span></h3>
-            </div>
-
-            <div class="property-group">
-                <h3>スタイル</h3>
-                <div class="property-item">
-                    <label>背景色:</label>
-                    <input type="color" id="bgColor" disabled>
-                </div>
-                <div class="property-item">
-                    <label>文字色:</label>
-                    <input type="color" id="textColor" disabled>
-                </div>
-                <div class="property-item">
-                    <label>フォントサイズ:</label>
-                    <input type="number" id="fontSize" min="8" max="72" disabled>
-                </div>
-                <div class="property-item">
-                    <label>パディング:</label>
-                    <input type="number" id="padding" min="0" max="100" disabled>
-                </div>
-                <div class="property-item">
-                    <label>マージン:</label>
-                    <input type="number" id="margin" min="0" max="100" disabled>
-                </div>
-                <div class="property-item">
-                    <label>ボーダー幅:</label>
-                    <input type="number" id="borderWidth" min="0" max="20" disabled>
-                </div>
-                <div class="property-item">
-                    <label>ボーダー色:</label>
-                    <input type="color" id="borderColor" disabled>
-                </div>
-                <div class="property-item">
-                    <label>ボーダー角丸:</label>
-                    <input type="number" id="borderRadius" min="0" max="50" disabled>
-                </div>
-            </div>
-
-            <div class="property-group">
-                <h3>レイアウト</h3>
-                <div class="property-item">
-                    <label>表示:</label>
-                    <select id="display" disabled>
-                        <option value="">デフォルト</option>
-                        <option value="block">ブロック</option>
-                        <option value="inline">インライン</option>
-                        <option value="inline-block">インラインブロック</option>
-                        <option value="flex">フレックス</option>
-                        <option value="grid">グリッド</option>
-                        <option value="none">非表示</option>
-                    </select>
-                </div>
-                <div class="property-item">
-                    <label>幅:</label>
-                    <input type="text" id="width" placeholder="auto, 100px, 50%" disabled>
-                </div>
-                <div class="property-item">
-                    <label>高さ:</label>
-                    <input type="text" id="height" placeholder="auto, 100px, 50%" disabled>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
-    <script>
-        class VisualWebEditor {
-            constructor() {
-                this.currentTab = 'html';
-                this.code = {
-                    html: '<div class="container">\n  <h1>Hello World</h1>\n  <p class="description">This is a sample paragraph.</p>\n  <button class="btn-primary">Click Me</button>\n</div>',
-                    css: '.container {\n  padding: 20px;\n  background: #f0f0f0;\n}\n\nh1 {\n  color: #333;\n  font-size: 32px;\n}\n\n.description {\n  color: #666;\n  margin: 15px 0;\n}\n\n.btn-primary {\n  background: #007acc;\n  color: white;\n  padding: 10px 20px;\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n}\n\n.btn-primary:hover {\n  background: #005a9e;\n}',
-                    js: '// JavaScript code here\ndocument.querySelector(".btn-primary")?.addEventListener("click", () => {\n  alert("Button clicked!");\n});'
-                };
-                
-                this.selectedElement = null;
-                this.init();
+  // 3. フルパスを生成 (フォールバック)
+  const path = [];
+  let current = el;
+  while (current && current.parentElement) {
+    let selectorPart = current.tagName.toLowerCase();
+    
+    // 同一タグの兄弟要素の中での位置を特定 (nth-of-type)
+    let sibling = current;
+    let nth = 1;
+    while (sibling.previousElementSibling) {
+      sibling = sibling.previousElementSibling;
+      if (sibling.tagName === current.tagName) {
+        nth++;
+      }
+    }
+    
+    // 兄弟要素に同じタグがなければ、:nth-of-typeは不要
+    const nextSibling = current.nextElementSibling;
+    let hasSimilarSibling = false;
+    if (nextSibling) {
+        let tempSibling = current.parentElement.firstElementChild;
+        while(tempSibling) {
+            if(tempSibling.tagName === current.tagName && tempSibling !== current) {
+                hasSimilarSibling = true;
+                break;
             }
-
-            init() {
-                this.setupEditor();
-                this.setupTabs();
-                this.setupPreview();
-                this.setupPropertyPanel();
-                this.setupToolbar();
-                this.updatePreview();
-            }
-
-            setupEditor() {
-                this.editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
-                    lineNumbers: true,
-                    theme: 'monokai',
-                    mode: 'htmlmixed',
-                    autoCloseTags: true,
-                    autoCloseBrackets: true,
-                    lineWrapping: true
-                });
-
-                this.editor.setValue(this.code[this.currentTab]);
-                
-                this.editor.on('change', () => {
-                    this.code[this.currentTab] = this.editor.getValue();
-                    this.updatePreview();
-                });
-            }
-
-            setupTabs() {
-                const tabs = document.querySelectorAll('.tab');
-                tabs.forEach(tab => {
-                    tab.addEventListener('click', () => {
-                        tabs.forEach(t => t.classList.remove('active'));
-                        tab.classList.add('active');
-                        
-                        this.currentTab = tab.dataset.tab;
-                        this.editor.setValue(this.code[this.currentTab]);
-                        
-                        const modeMap = {
-                            html: 'htmlmixed',
-                            css: 'css',
-                            js: 'javascript'
-                        };
-                        this.editor.setOption('mode', modeMap[this.currentTab]);
-                    });
-                });
-            }
-
-            setupPreview() {
-                const preview = document.getElementById('preview');
-                const selector = document.getElementById('elementSelector');
-                const label = document.getElementById('elementLabel');
-
-                preview.addEventListener('load', () => {
-                    const previewDoc = preview.contentDocument;
-                    
-                    previewDoc.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        
-                        if (e.target === previewDoc.body) return;
-                        
-                        this.selectElement(e.target);
-                    });
-
-                    previewDoc.addEventListener('mouseover', (e) => {
-                        if (e.target === previewDoc.body || e.target === this.selectedElement) return;
-                        
-                        const rect = e.target.getBoundingClientRect();
-                        selector.style.display = 'block';
-                        selector.style.left = rect.left + 'px';
-                        selector.style.top = rect.top + 'px';
-                        selector.style.width = rect.width + 'px';
-                        selector.style.height = rect.height + 'px';
-                        
-                        label.textContent = e.target.tagName.toLowerCase() + 
-                            (e.target.className ? '.' + e.target.className : '') +
-                            (e.target.id ? '#' + e.target.id : '');
-                    });
-
-                    previewDoc.addEventListener('mouseout', () => {
-                        selector.style.display = 'none';
-                    });
-                });
-            }
-
-            selectElement(element) {
-                this.selectedElement = element;
-                document.getElementById('selectedElement').textContent = 
-                    element.tagName.toLowerCase() + 
-                    (element.className ? '.' + element.className : '') +
-                    (element.id ? '#' + element.id : '');
-
-                const computedStyle = window.getComputedStyle(element);
-                
-                // プロパティパネルの入力を有効化して値を設定
-                const inputs = document.querySelectorAll('.property-item input, .property-item select');
-                inputs.forEach(input => input.disabled = false);
-
-                // 現在のスタイルを取得して表示
-                document.getElementById('bgColor').value = this.rgbToHex(computedStyle.backgroundColor);
-                document.getElementById('textColor').value = this.rgbToHex(computedStyle.color);
-                document.getElementById('fontSize').value = parseInt(computedStyle.fontSize);
-                document.getElementById('padding').value = parseInt(computedStyle.padding);
-                document.getElementById('margin').value = parseInt(computedStyle.margin);
-                document.getElementById('borderWidth').value = parseInt(computedStyle.borderWidth);
-                document.getElementById('borderColor').value = this.rgbToHex(computedStyle.borderColor);
-                document.getElementById('borderRadius').value = parseInt(computedStyle.borderRadius);
-                document.getElementById('display').value = computedStyle.display === 'block' ? 'block' : 
-                                                          computedStyle.display === 'flex' ? 'flex' : 
-                                                          computedStyle.display === 'grid' ? 'grid' : '';
-                document.getElementById('width').value = computedStyle.width;
-                document.getElementById('height').value = computedStyle.height;
-            }
-
-            setupPropertyPanel() {
-                const properties = {
-                    bgColor: (value) => `background-color: ${value}`,
-                    textColor: (value) => `color: ${value}`,
-                    fontSize: (value) => `font-size: ${value}px`,
-                    padding: (value) => `padding: ${value}px`,
-                    margin: (value) => `margin: ${value}px`,
-                    borderWidth: (value) => `border-width: ${value}px`,
-                    borderColor: (value) => `border-color: ${value}`,
-                    borderRadius: (value) => `border-radius: ${value}px`,
-                    display: (value) => value ? `display: ${value}` : '',
-                    width: (value) => `width: ${value}`,
-                    height: (value) => `height: ${value}`
-                };
-
-                Object.keys(properties).forEach(prop => {
-                    const element = document.getElementById(prop);
-                    if (element) {
-                        element.addEventListener('input', () => {
-                            if (!this.selectedElement) return;
-                            
-                            const value = element.value;
-                            if (!value && prop !== 'display') return;
-                            
-                            this.applyStyleToElement(properties[prop](value));
-                        });
-                    }
-                });
-            }
-
-            applyStyleToElement(styleRule) {
-                if (!this.selectedElement) return;
-
-                const [property, value] = styleRule.split(':').map(s => s.trim());
-                this.selectedElement.style[this.toCamelCase(property)] = value;
-
-                // CSSコードを更新
-                this.updateCSSCode();
-            }
-
-            updateCSSCode() {
-                if (!this.selectedElement) return;
-
-                let selector = this.selectedElement.tagName.toLowerCase();
-                if (this.selectedElement.className) {
-                    selector = '.' + this.selectedElement.className.split(' ')[0];
-                } else if (this.selectedElement.id) {
-                    selector = '#' + this.selectedElement.id;
-                }
-
-                const styles = this.selectedElement.getAttribute('style');
-                if (!styles) return;
-
-                const cssRules = styles.split(';').filter(rule => rule.trim());
-                const formattedRules = cssRules.map(rule => '  ' + rule.trim()).join(';\n');
-
-                let currentCSS = this.code.css;
-                const selectorRegex = new RegExp(`${selector}\\s*{[^}]*}`, 'g');
-                
-                if (currentCSS.match(selectorRegex)) {
-                    currentCSS = currentCSS.replace(selectorRegex, `${selector} {\n${formattedRules};\n}`);
-                } else {
-                    currentCSS += `\n\n${selector} {\n${formattedRules};\n}`;
-                }
-
-                this.code.css = currentCSS;
-                if (this.currentTab === 'css') {
-                    this.editor.setValue(currentCSS);
-                }
-            }
-
-            setupToolbar() {
-                document.getElementById('runBtn').addEventListener('click', () => {
-                    this.updatePreview();
-                });
-
-                document.getElementById('clearBtn').addEventListener('click', () => {
-                    this.code = { html: '', css: '', js: '' };
-                    this.editor.setValue('');
-                    this.updatePreview();
-                });
-
-                document.getElementById('downloadBtn').addEventListener('click', () => {
-                    this.downloadCode();
-                });
-            }
-
-            updatePreview() {
-                const preview = document.getElementById('preview');
-                const htmlContent = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <style>${this.code.css}</style>
-                    </head>
-                    <body>
-                        ${this.code.html}
-                        <script>${this.code.js}<\/script>
-                    </body>
-                    </html>
-                `;
-                
-                preview.srcdoc = htmlContent;
-            }
-
-            downloadCode() {
-                const fullHTML = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generated Web App</title>
-    <style>
-${this.code.css}
-    </style>
-</head>
-<body>
-${this.code.html}
-    <script>
-${this.code.js}
-    </script>
-</body>
-</html>`;
-
-                const blob = new Blob([fullHTML], { type: 'text/html' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'index.html';
-                a.click();
-                URL.revokeObjectURL(url);
-            }
-
-            rgbToHex(rgb) {
-                if (!rgb || rgb === 'transparent') return '#000000';
-                const result = rgb.match(/\d+/g);
-                if (!result) return '#000000';
-                return "#" + ((1 << 24) + (parseInt(result[0]) << 16) + (parseInt(result[1]) << 8) + parseInt(result[2])).toString(16).slice(1);
-            }
-
-            toCamelCase(str) {
-                return str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-            }
+            tempSibling = tempSibling.nextElementSibling;
         }
+    }
 
-        // アプリケーションの初期化
-        document.addEventListener('DOMContentLoaded', () => {
-            new VisualWebEditor();
-        });
-    </script>
-</body>
-</html>
+    if (nth > 1 || hasSimilarSibling) {
+      selectorPart += `:nth-of-type(${nth})`;
+    }
+
+    path.unshift(selectorPart);
+    
+    // bodyまで来たら終了
+    if (current.parentElement.tagName === 'BODY') break;
+    current = current.parentElement;
+  }
+
+  return path.join(' > ');
+};
