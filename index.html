@@ -1,71 +1,501 @@
-/**
- * DOM要素から一意で安定したCSSセレクタを生成する
- * 優先順位: ID > 一意のクラス > タグ+クラス > nth-of-typeパス
- * @param {HTMLElement} el - 対象のDOM要素
- * @param {Document} doc - 要素が存在するドキュメント (iframeのdocument)
- * @returns {string} 生成されたCSSセレクタ
- */
-export const getUniqueCssSelector = (el, doc) => {
-  if (!(el instanceof HTMLElement)) return '';
+// src/App.js
 
-  // 1. IDセレクタ (最も優先)
-  if (el.id) {
-    const selector = `#${el.id}`;
-    if (doc.querySelectorAll(selector).length === 1) {
-      return selector;
-    }
+// --- 1. 必要なライブラリのインポート ---
+import React, { useState, useRef, useCallback } from 'react';
+import styled, { createGlobalStyle } from 'styled-components';
+import { debounce } from 'lodash';
+import Editor from '@monaco-editor/react';
+import { SketchPicker } from 'react-color';
+import postcss from 'postcss';
+
+
+// --- 2. グローバルスタイルの定義 (旧 index.css) ---
+const GlobalStyle = createGlobalStyle`
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 
-  // 2. クラスセレクタ (一意なものがあれば優先)
+  /* スクロールバーのスタイル */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #282c34;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #777;
+  }
+`;
+
+
+// --- 3. ユーティリティ関数の定義 ---
+
+/**
+ * (旧 selectorGenerator.js)
+ * DOM要素から一意で安定したCSSセレクタを生成する
+ */
+const getUniqueCssSelector = (el, doc) => {
+  if (!(el instanceof HTMLElement)) return '';
+  if (el.id) {
+    const selector = `#${el.id}`;
+    if (doc.querySelectorAll(selector).length === 1) return selector;
+  }
   if (el.classList.length > 0) {
     for (const className of el.classList) {
       const selector = `.${className}`;
-      if (doc.querySelectorAll(selector).length === 1) {
-        return `${el.tagName.toLowerCase()}${selector}`;
-      }
+      if (doc.querySelectorAll(selector).length === 1) return `${el.tagName.toLowerCase()}${selector}`;
     }
   }
-
-  // 3. フルパスを生成 (フォールバック)
   const path = [];
   let current = el;
   while (current && current.parentElement) {
     let selectorPart = current.tagName.toLowerCase();
-    
-    // 同一タグの兄弟要素の中での位置を特定 (nth-of-type)
     let sibling = current;
     let nth = 1;
     while (sibling.previousElementSibling) {
       sibling = sibling.previousElementSibling;
-      if (sibling.tagName === current.tagName) {
-        nth++;
-      }
+      if (sibling.tagName === current.tagName) nth++;
     }
-    
-    // 兄弟要素に同じタグがなければ、:nth-of-typeは不要
     const nextSibling = current.nextElementSibling;
     let hasSimilarSibling = false;
     if (nextSibling) {
-        let tempSibling = current.parentElement.firstElementChild;
-        while(tempSibling) {
-            if(tempSibling.tagName === current.tagName && tempSibling !== current) {
-                hasSimilarSibling = true;
-                break;
-            }
-            tempSibling = tempSibling.nextElementSibling;
+      let tempSibling = current.parentElement.firstElementChild;
+      while(tempSibling) {
+        if(tempSibling.tagName === current.tagName && tempSibling !== current) {
+            hasSimilarSibling = true;
+            break;
         }
+        tempSibling = tempSibling.nextElementSibling;
+      }
     }
-
-    if (nth > 1 || hasSimilarSibling) {
-      selectorPart += `:nth-of-type(${nth})`;
-    }
-
+    if (nth > 1 || hasSimilarSibling) selectorPart += `:nth-of-type(${nth})`;
     path.unshift(selectorPart);
-    
-    // bodyまで来たら終了
     if (current.parentElement.tagName === 'BODY') break;
     current = current.parentElement;
   }
-
   return path.join(' > ');
 };
+
+/**
+ * (旧 cssProcessor.js)
+ * PostCSSを使用してCSSコード文字列を安全に更新する
+ */
+const updateCssCode = (originalCss, selector, property, value) => {
+  const kebabCaseProperty = property.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
+  try {
+    const root = postcss.parse(originalCss);
+    let ruleFound = false;
+    root.walkRules(new RegExp(`^${selector.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`), (rule) => {
+      ruleFound = true;
+      let declarationFound = false;
+      rule.walkDecls(kebabCaseProperty, (decl) => {
+        decl.value = value;
+        declarationFound = true;
+      });
+      if (!declarationFound) rule.append({ prop: kebabCaseProperty, value: value });
+    });
+    if (!ruleFound) {
+      const newRule = postcss.rule({ selector: selector });
+      newRule.append({ prop: kebabCaseProperty, value: value });
+      root.append(newRule);
+    }
+    return root.toString();
+  } catch (error) {
+    console.error("PostCSS parsing error:", error);
+    return originalCss;
+  }
+};
+
+
+// --- 4. サブコンポーネントの定義 ---
+
+/**
+ * (旧 CodeEditor.js)
+ * Monaco Editorをラップするコンポーネント
+ */
+const CodeEditor = ({ language, value, onChange }) => {
+  const EditorWrapper = styled.div` flex: 1; `;
+  return (
+    <EditorWrapper>
+      <Editor
+        height="100%"
+        language={language}
+        value={value}
+        onChange={onChange}
+        theme="vs-dark"
+        options={{
+          minimap: { enabled: false },
+          fontSize: 14,
+          wordWrap: 'on',
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+        }}
+      />
+    </EditorWrapper>
+  );
+};
+
+/**
+ * (旧 IframePreview.js)
+ * コードを<iframe>内にレンダリングし、要素選択イベントをハンドリング
+ */
+const IframePreview = ({ htmlCode, cssCode, jsCode, onElementSelected, iframeRef }) => {
+  const [highlight, setHighlight] = useState(null);
+  const srcDoc = `
+    <!DOCTYPE html><html><head><style>${cssCode}</style></head>
+    <body>${htmlCode}<script>try { ${jsCode} } catch (e) { console.error(e); }</script></body></html>
+  `;
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    const handleLoad = () => {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      const clickHandler = (event) => {
+        event.preventDefault(); event.stopPropagation();
+        const target = event.target;
+        if (target && target !== doc.body && target !== doc.documentElement) {
+          const rect = target.getBoundingClientRect();
+          setHighlight({
+            top: rect.top + iframe.contentWindow.scrollY,
+            left: rect.left + iframe.contentWindow.scrollX,
+            width: rect.width,
+            height: rect.height,
+          });
+          onElementSelected(target, doc);
+        } else {
+          setHighlight(null); onElementSelected(null, null);
+        }
+      };
+      doc.body.addEventListener('click', clickHandler, true);
+      return () => doc.body.removeEventListener('click', clickHandler, true);
+    };
+    iframe.addEventListener('load', handleLoad);
+    return () => iframe.removeEventListener('load', handleLoad);
+  }, [htmlCode, cssCode, jsCode, onElementSelected, iframeRef]);
+
+  const IframeWrapper = styled.div` flex: 1; background-color: white; overflow: auto; position: relative; `;
+  const StyledIframe = styled.iframe` width: 100%; height: 100%; border: none; `;
+  const HighlightBox = styled.div` position: absolute; border: 2px solid #00aeff; background-color: rgba(0, 174, 255, 0.25); pointer-events: none; z-index: 9999; transition: all 0.05s ease-out; box-sizing: border-box; `;
+
+  return (
+    <IframeWrapper>
+      <StyledIframe ref={iframeRef} srcDoc={srcDoc} title="preview" sandbox="allow-scripts allow-same-origin" />
+      {highlight && <HighlightBox style={{ top: `${highlight.top}px`, left: `${highlight.left}px`, width: `${highlight.width}px`, height: `${highlight.height}px` }} />}
+    </IframeWrapper>
+  );
+};
+
+/**
+ * (旧 StyleEditorPanel.js)
+ * 選択された要素のスタイルを編集するUIパネル
+ */
+const StyleEditorPanel = ({ selector, styles, onStyleChange }) => {
+  const [colorPicker, setColorPicker] = useState({ visible: false, property: '' });
+  const handleColorChange = (color) => onStyleChange(colorPicker.property, color.hex);
+  const openColorPicker = (property) => setColorPicker({ visible: true, property });
+  const closeColorPicker = () => setColorPicker({ visible: false, property: '' });
+  
+  if (!selector) return <Panel><p>Select an element in the preview to begin editing.</p></Panel>;
+
+  const toKebabCase = (str) => str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, '$1-$2').toLowerCase();
+  
+  const renderColorInput = (property) => (
+    <FieldGroup>
+      <Label>{toKebabCase(property)}</Label>
+      <ColorDisplay style={{ backgroundColor: styles[property] }} onClick={() => openColorPicker(property)} />
+      {colorPicker.visible && colorPicker.property === property && (
+        <Popover><Cover onClick={closeColorPicker} /><SketchPicker color={styles[property]} onChange={handleColorChange} /></Popover>
+      )}
+    </FieldGroup>
+  );
+
+  const renderUnitInput = (property) => (
+    <FieldGroup>
+      <Label>{toKebabCase(property)}</Label>
+      <Input type="text" value={styles[property] || ''} onChange={(e) => onStyleChange(property, e.target.value)} />
+    </FieldGroup>
+  );
+  
+  const renderSelectInput = (property, options) => (
+    <FieldGroup>
+      <Label>{toKebabCase(property)}</Label>
+      <Select value={styles[property]} onChange={(e) => onStyleChange(property, e.target.value)}>
+        {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+      </Select>
+    </FieldGroup>
+  );
+
+  return (
+    <Panel>
+      <SectionTitle>{selector}</SectionTitle>
+      <CategoryTitle>Layout</CategoryTitle>
+      {renderSelectInput('display', ['block', 'inline-block', 'flex', 'grid', 'inline', 'none'])}
+      {styles.display === 'flex' && (
+        <>
+          <CategoryTitle>Flexbox</CategoryTitle>
+          {renderSelectInput('flexDirection', ['row', 'row-reverse', 'column', 'column-reverse'])}
+          {renderSelectInput('justifyContent', ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly'])}
+          {renderSelectInput('alignItems', ['stretch', 'flex-start', 'flex-end', 'center', 'baseline'])}
+        </>
+      )}
+      <CategoryTitle>Sizing</CategoryTitle>
+      {renderUnitInput('width')}{renderUnitInput('height')}
+      <CategoryTitle>Spacing</CategoryTitle>
+      {renderUnitInput('marginTop')}{renderUnitInput('marginRight')}{renderUnitInput('marginBottom')}{renderUnitInput('marginLeft')}
+      {renderUnitInput('paddingTop')}{renderUnitInput('paddingRight')}{renderUnitInput('paddingBottom')}{renderUnitInput('paddingLeft')}
+      <CategoryTitle>Appearance</CategoryTitle>
+      {renderColorInput('color')}{renderColorInput('backgroundColor')}{renderUnitInput('borderRadius')}
+      <CategoryTitle>Typography</CategoryTitle>
+      {renderUnitInput('fontSize')}
+    </Panel>
+  );
+};
+
+
+// --- 5. メイン App コンポーネント ---
+
+// 初期コードデータ
+const initialHtml = `
+<div class="container">
+  <h1>Real-time Web Editor</h1>
+  <p id="my-paragraph">Click any element to inspect and edit its styles.</p>
+  <div class="button-group">
+    <button class="my-button primary">Primary</button>
+    <button class="my-button secondary">Secondary</button>
+  </div>
+  <div class="flex-container">
+    <div class="flex-item">1</div>
+    <div class="flex-item">2</div>
+    <div class="flex-item">3</div>
+  </div>
+</div>
+`;
+
+const initialCss = `
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f4f7f9;
+  color: #333;
+}
+
+.container {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 30px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+h1 {
+  color: #1a202c;
+  text-align: center;
+  font-size: 2em;
+}
+
+#my-paragraph {
+  color: #4a5568;
+  line-height: 1.6;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.button-group {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.my-button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 10px;
+  transition: all 0.2s ease-in-out;
+}
+
+.primary {
+  background-color: #4299e1;
+  color: white;
+}
+.primary:hover {
+  background-color: #2b6cb0;
+  transform: translateY(-2px);
+}
+
+.secondary {
+  background-color: #e2e8f0;
+  color: #2d3748;
+}
+.secondary:hover {
+  background-color: #cbd5e0;
+  transform: translateY(-2px);
+}
+
+.flex-container {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background-color: #edf2f7;
+  padding: 20px;
+  border-radius: 8px;
+  min-height: 150px;
+}
+
+.flex-item {
+  width: 80px;
+  height: 80px;
+  background-color: #90cdf4;
+  color: #1a365d;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  font-weight: bold;
+  border-radius: 8px;
+}
+`;
+
+const initialJs = `
+document.addEventListener('DOMContentLoaded', () => {
+  const buttons = document.querySelectorAll('.my-button');
+  buttons.forEach(button => {
+    button.addEventListener('click', () => {
+      const type = button.classList.contains('primary') ? 'Primary' : 'Secondary';
+      alert(type + ' button clicked!');
+    });
+  });
+});
+`;
+
+function App() {
+  const [htmlCode, setHtmlCode] = useState(initialHtml);
+  const [cssCode, setCssCode] = useState(initialCss);
+  const [jsCode, setJsCode] = useState(initialJs);
+  const [activeTab, setActiveTab] = useState('html');
+  const [selectedElement, setSelectedElement] = useState(null);
+  const [selectedElementSelector, setSelectedElementSelector] = useState('');
+  const [selectedElementComputedStyles, setSelectedElementComputedStyles] = useState({});
+  const iframeRef = useRef(null);
+
+  const debouncedSetHtmlCode = useCallback(debounce(setHtmlCode, 300), []);
+  const debouncedSetCssCode = useCallback(debounce(setCssCode, 300), []);
+  const debouncedSetJsCode = useCallback(debounce(setJsCode, 300), []);
+
+  const handleEditorChange = (value, language) => {
+    if (language === 'html') debouncedSetHtmlCode(value);
+    if (language === 'css') debouncedSetCssCode(value);
+    if (language === 'javascript') debouncedSetJsCode(value);
+  };
+
+  const handleElementSelected = (element, iframeDocument) => {
+    setSelectedElement(element);
+    if (element) {
+      const selector = getUniqueCssSelector(element, iframeDocument);
+      setSelectedElementSelector(selector);
+      const computedStyles = iframeDocument.defaultView.getComputedStyle(element);
+      const styles = {};
+      const propertiesToExtract = [
+        'color', 'backgroundColor', 'width', 'height', 'fontSize',
+        'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+        'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+        'borderRadius', 'border',
+        'display', 'flexDirection', 'justifyContent', 'alignItems'
+      ];
+      propertiesToExtract.forEach(prop => { styles[prop] = computedStyles[prop]; });
+      setSelectedElementComputedStyles(styles);
+    } else {
+      setSelectedElementSelector('');
+      setSelectedElementComputedStyles({});
+    }
+  };
+
+  const handleStyleChange = (property, value) => {
+    if (!selectedElement || !selectedElementSelector) return;
+    selectedElement.style[property] = value;
+    const newCss = updateCssCode(cssCode, selectedElementSelector, property, value);
+    setCssCode(newCss);
+    const computedStyles = iframeRef.current.contentWindow.getComputedStyle(selectedElement);
+    setSelectedElementComputedStyles(prev => ({ ...prev, [property]: computedStyles[property] }));
+  };
+  
+  const handleReset = () => {
+    if (window.confirm('Are you sure you want to reset all code?')) {
+      setHtmlCode(initialHtml); setCssCode(initialCss); setJsCode(initialJs);
+      setSelectedElement(null); setSelectedElementSelector(''); setSelectedElementComputedStyles({});
+    }
+  };
+
+  return (
+    <>
+      <GlobalStyle />
+      <Container>
+        <Header>
+          <h1>Web Editor Pro</h1>
+          <Button onClick={handleReset}>Reset All</Button>
+        </Header>
+        <MainContent>
+          <EditorColumn>
+            <Tabs>
+              <Tab active={activeTab === 'html'} onClick={() => setActiveTab('html')}>HTML</Tab>
+              <Tab active={activeTab === 'css'} onClick={() => setActiveTab('css')}>CSS</Tab>
+              <Tab active={activeTab === 'js'} onClick={() => setActiveTab('js')}>JS</Tab>
+            </Tabs>
+            <CodeEditor
+              language={activeTab}
+              value={ activeTab === 'html' ? htmlCode : activeTab === 'css' ? cssCode : jsCode }
+              onChange={(value) => handleEditorChange(value, activeTab === 'js' ? 'javascript' : activeTab)}
+            />
+          </EditorColumn>
+          <PreviewColumn>
+            <IframePreview {...{ htmlCode, cssCode, jsCode, onElementSelected, iframeRef }} />
+          </PreviewColumn>
+          <StylePanelColumn>
+            <StyleEditorPanel {...{ selector: selectedElementSelector, styles: selectedElementComputedStyles, onStyleChange: handleStyleChange }} />
+          </StylePanelColumn>
+        </MainContent>
+      </Container>
+    </>
+  );
+}
+
+
+// --- 6. Styled Components の定義 ---
+const Container = styled.div` display: flex; flex-direction: column; height: 100vh; background-color: #282c34; `;
+const Header = styled.header` display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background-color: #20232a; color: #61dafb; border-bottom: 1px solid #444; h1 { margin: 0; font-size: 1.4em; } `;
+const Button = styled.button` background-color: #61dafb; color: #20232a; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: background-color 0.2s; &:hover { background-color: #21a1f1; } `;
+const MainContent = styled.div` display: flex; flex: 1; overflow: hidden; `;
+const EditorColumn = styled.div` flex: 2; display: flex; flex-direction: column; min-width: 300px; `;
+const PreviewColumn = styled.div` flex: 3; display: flex; flex-direction: column; border-left: 1px solid #444; border-right: 1px solid #444; `;
+const StylePanelColumn = styled.div` flex: 1.5; min-width: 280px; background-color: #282c34; overflow-y: auto; `;
+const Tabs = styled.div` display: flex; background-color: #20232a; `;
+const Tab = styled.button` padding: 12px 18px; border: none; background-color: ${props => (props.active ? '#282c34' : 'transparent')}; color: ${props => (props.active ? '#61dafb' : '#ccc')}; cursor: pointer; font-size: 1em; outline: none; border-bottom: 2px solid ${props => (props.active ? '#61dafb' : 'transparent')}; transition: all 0.2s ease-in-out; &:hover { color: #61dafb; } `;
+// StyleEditorPanel内コンポーネント
+const Panel = styled.div` padding: 20px; color: #e0e0e0; height: 100%; box-sizing: border-box; `;
+const SectionTitle = styled.h3` margin-top: 0; color: #61dafb; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.1em; word-break: break-all; `;
+const CategoryTitle = styled.h4` color: #ccc; margin-top: 24px; margin-bottom: 12px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.5px; `;
+const FieldGroup = styled.div` margin-bottom: 15px; `;
+const Label = styled.label` display: block; margin-bottom: 6px; font-size: 0.9em; color: #aaa; `;
+const Input = styled.input` width: 100%; padding: 8px; border: 1px solid #555; border-radius: 4px; font-size: 0.9em; background-color: #333; color: #eee; box-sizing: border-box; `;
+const Select = styled.select` width: 100%; padding: 8px; border: 1px solid #555; border-radius: 4px; font-size: 0.9em; background-color: #333; color: #eee; `;
+const ColorDisplay = styled.div` width: 100%; height: 30px; border: 1px solid #555; border-radius: 4px; cursor: pointer; margin-top: 5px; `;
+const Popover = styled.div` position: absolute; z-index: 10; `;
+const Cover = styled.div` position: fixed; top: 0; right: 0; bottom: 0; left: 0; `;
+
+
+// --- 7. App コンポーネントのエクスポート ---
+export default App;
