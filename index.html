@@ -1,609 +1,562 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <title>Visual Web App Editor (MVP)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    :root {
-      --bg: #0f1220;
-      --panel: #171a2b;
-      --accent: #4cc9f0;
-      --green: #42d392;
-      --text: #e6e8f2;
-      --muted: #9aa3b2;
-      --border: #2a2f45;
-      --danger: #f16b6f;
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-    .app {
-      display: grid;
-      grid-template-columns: 1.1fr 1.4fr;
-      grid-template-rows: auto 1fr;
-      height: 100%;
-      gap: 8px;
-      padding: 8px;
-    }
-    header {
-      grid-column: 1 / -1;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    }
-    header .title { font-weight: 700; letter-spacing: .4px; }
-    header .actions { display: flex; gap: 8px; }
-    button, .toggle {
-      background: #22263b; color: var(--text); border: 1px solid var(--border);
-      padding: 8px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;
-    }
-    button:hover, .toggle:hover { border-color: #3a4060; }
-    .toggle[data-on="true"] { background: #213046; border-color: var(--accent); box-shadow: 0 0 0 1px inset var(--accent); }
-    .pane {
-      background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; min-height: 0;
-      display: flex; flex-direction: column;
-    }
-    .pane .tabs { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); }
-    .tab {
-      padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--muted);
-      background: #1b1f33;
-    }
-    .tab[data-active="true"] { color: var(--text); border-color: #3a4060; background: #20253b; }
-    .editors { position: relative; flex: 1; }
-    .editor { position: absolute; inset: 0; display: none; }
-    .editor[data-active="true"] { display: flex; }
-    textarea {
-      width: 100%; height: 100%; resize: none; outline: none; border: none; background: #0e1120; color: #eaeefb; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5;
-    }
-    .right { display: grid; grid-template-rows: auto 1fr; gap: 8px; min-height: 0; }
-    .toolbar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border); }
-    .preview-pane { display: grid; grid-template-rows: auto 1fr; }
-    .frame-wrap { position: relative; border-top: 1px solid var(--border); }
-    iframe { width: 100%; height: 100%; border: 0; background: white; border-top: 1px solid var(--border); }
-    .styles {
-      border-top: 1px solid var(--border);
-      padding: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
-      background: #14182b;
-    }
-    .styles h3 { grid-column: 1 / -1; margin: 4px 0 8px; font-size: 13px; color: var(--muted); }
-    .field { display: flex; flex-direction: column; gap: 4px; }
-    .field label { font-size: 11px; color: var(--muted); }
-    .field input, .field select {
-      background: #0e1120; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px;
-    }
-    .row-4 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .muted { color: var(--muted); font-size: 12px; }
-    .footer { grid-column: 1 / -1; text-align: right; padding: 6px 8px; font-size: 11px; color: var(--muted); }
-    .danger { color: var(--danger); }
-    .badge { background: #212640; border: 1px solid #334; color: var(--muted); padding: 2px 6px; border-radius: 1000px; font-size: 11px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Web Editor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: #1e1e1e;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 60px 1fr 300px;
+            height: 100vh;
+            gap: 1px;
+            background: #2d2d30;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: #2d2d30;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #3e3e42;
+        }
+
+        .header h1 {
+            color: #fff;
+            font-size: 20px;
+            margin-right: auto;
+        }
+
+        .tab-container {
+            display: flex;
+            gap: 10px;
+            margin-right: 20px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            background: #3e3e42;
+            color: #ccc;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: #007acc;
+            color: white;
+        }
+
+        .editor-panel {
+            background: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .preview-panel {
+            background: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .preview-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .properties-panel {
+            grid-column: 1 / -1;
+            background: #252526;
+            padding: 20px;
+            overflow-y: auto;
+            border-top: 1px solid #3e3e42;
+        }
+
+        .property-group {
+            margin-bottom: 20px;
+        }
+
+        .property-group h3 {
+            color: #ccc;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .property-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+
+        .property-item label {
+            color: #aaa;
+            width: 120px;
+            font-size: 13px;
+        }
+
+        .property-item input,
+        .property-item select {
+            flex: 1;
+            padding: 5px;
+            background: #3e3e42;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 3px;
+        }
+
+        .CodeMirror {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .element-selector {
+            position: absolute;
+            border: 2px solid #007acc;
+            pointer-events: none;
+            z-index: 9999;
+            display: none;
+        }
+
+        .element-label {
+            position: absolute;
+            background: #007acc;
+            color: white;
+            padding: 2px 6px;
+            font-size: 11px;
+            top: -20px;
+            left: 0;
+            white-space: nowrap;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn:hover {
+            background: #005a9e;
+        }
+
+        .resize-handle {
+            width: 4px;
+            background: #3e3e42;
+            cursor: col-resize;
+            position: relative;
+        }
+
+        .resize-handle:hover {
+            background: #007acc;
+        }
+    </style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="title">Visual Web App Editor (MVP) <span class="badge">code ⇄ visual live</span></div>
-      <div class="actions">
-        <button id="btnReload">強制リロード</button>
-        <button id="btnFormat">HTMLを再整形</button>
-        <div id="btnInspect" class="toggle" role="switch" aria-checked="false" data-on="false">インスペクト</div>
-      </div>
-    </header>
-
-    <section class="pane">
-      <div class="tabs">
-        <div class="tab" data-tab="html" data-active="true">HTML</div>
-        <div class="tab" data-tab="css">CSS</div>
-        <div class="tab" data-tab="js">JS</div>
-      </div>
-      <div class="editors">
-        <div class="editor" data-panel="html" data-active="true"><textarea id="htmlInput" spellcheck="false"></textarea></div>
-        <div class="editor" data-panel="css"><textarea id="cssInput" spellcheck="false"></textarea></div>
-        <div class="editor" data-panel="js"><textarea id="jsInput" spellcheck="false"></textarea></div>
-      </div>
-      <div class="footer">注意: MVPはインラインstyleへ書き戻します。外部ファイルやフレームワークは未対応。</div>
-    </section>
-
-    <section class="pane right">
-      <div class="toolbar">
-        <span class="muted">選択: <span id="selMeta">なし</span></span>
-      </div>
-      <div class="preview-pane">
-        <div class="frame-wrap">
-          <iframe id="preview" sandbox="allow-scripts allow-same-origin"></iframe>
+    <div class="container">
+        <div class="header">
+            <h1>Visual Web Editor</h1>
+            <div class="tab-container">
+                <button class="tab active" data-tab="html">HTML</button>
+                <button class="tab" data-tab="css">CSS</button>
+                <button class="tab" data-tab="js">JavaScript</button>
+            </div>
+            <div class="toolbar">
+                <button class="btn" id="runBtn">▶ Run</button>
+                <button class="btn" id="clearBtn">Clear</button>
+                <button class="btn" id="downloadBtn">Download</button>
+            </div>
         </div>
-        <div class="styles" id="stylePanel">
-          <h3>スタイル編集</h3>
-          <div class="field"><label>class</label><input id="classInput" placeholder="例: btn primary" /></div>
-          <div class="field"><label>display</label>
-            <select id="displayInput">
-              <option value="">(既定)</option>
-              <option>block</option><option>inline</option><option>inline-block</option>
-              <option>flex</option><option>grid</option>
-            </select>
-          </div>
-          <div class="field"><label>color</label><input id="colorInput" type="text" placeholder="#333 or red" /></div>
-          <div class="field"><label>color (picker)</label><input id="colorPicker" type="color" /></div>
-          <div class="field"><label>background-color</label><input id="bgInput" type="text" placeholder="#fff" /></div>
-          <div class="field"><label>background (picker)</label><input id="bgPicker" type="color" /></div>
-          <div class="field"><label>font-size (px)</label><input id="fontSizeInput" type="number" min="0" step="1" /></div>
-          <div class="field"><label>width (px or %)</label><input id="widthInput" type="text" placeholder="auto / 200px / 50%" /></div>
-          <div class="field"><label>height (px or %)</label><input id="heightInput" type="text" placeholder="auto / 100px / 50%" /></div>
-          <div class="row-4">
-            <div class="field"><label>margin-top</label><input id="mtInput" type="text" placeholder="0 / 8px" /></div>
-            <div class="field"><label>margin-right</label><input id="mrInput" type="text" /></div>
-            <div class="field"><label>margin-bottom</label><input id="mbInput" type="text" /></div>
-            <div class="field"><label>margin-left</label><input id="mlInput" type="text" /></div>
-          </div>
-          <div class="row-4">
-            <div class="field"><label>padding-top</label><input id="ptInput" type="text" /></div>
-            <div class="field"><label>padding-right</label><input id="prInput" type="text" /></div>
-            <div class="field"><label>padding-bottom</label><input id="pbInput" type="text" /></div>
-            <div class="field"><label>padding-left</label><input id="plInput" type="text" /></div>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
 
-  <script>
-    // --- 初期データ ---
-    const DEFAULT_HTML = `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Sample App</title>
-  </head>
-  <body>
-    <header class="hero">
-      <h1>Hello, world</h1>
-      <p>Welcome to the visual editor demo.</p>
-      <button class="btn">Click me</button>
-    </header>
-    <section class="cards">
-      <div class="card"><h3>Card A</h3><p>Some text...</p></div>
-      <div class="card"><h3>Card B</h3><p>More text...</p></div>
-      <div class="card"><h3>Card C</h3><p>And more...</p></div>
-    </section>
-  </body>
+        <div class="editor-panel">
+            <textarea id="codeEditor"></textarea>
+        </div>
+
+        <div class="preview-panel">
+            <iframe class="preview-frame" id="preview"></iframe>
+            <div class="element-selector" id="elementSelector">
+                <div class="element-label" id="elementLabel"></div>
+            </div>
+        </div>
+
+        <div class="properties-panel">
+            <div class="property-group">
+                <h3>選択要素: <span id="selectedElement">なし</span></h3>
+            </div>
+
+            <div class="property-group">
+                <h3>スタイル</h3>
+                <div class="property-item">
+                    <label>背景色:</label>
+                    <input type="color" id="bgColor" disabled>
+                </div>
+                <div class="property-item">
+                    <label>文字色:</label>
+                    <input type="color" id="textColor" disabled>
+                </div>
+                <div class="property-item">
+                    <label>フォントサイズ:</label>
+                    <input type="number" id="fontSize" min="8" max="72" disabled>
+                </div>
+                <div class="property-item">
+                    <label>パディング:</label>
+                    <input type="number" id="padding" min="0" max="100" disabled>
+                </div>
+                <div class="property-item">
+                    <label>マージン:</label>
+                    <input type="number" id="margin" min="0" max="100" disabled>
+                </div>
+                <div class="property-item">
+                    <label>ボーダー幅:</label>
+                    <input type="number" id="borderWidth" min="0" max="20" disabled>
+                </div>
+                <div class="property-item">
+                    <label>ボーダー色:</label>
+                    <input type="color" id="borderColor" disabled>
+                </div>
+                <div class="property-item">
+                    <label>ボーダー角丸:</label>
+                    <input type="number" id="borderRadius" min="0" max="50" disabled>
+                </div>
+            </div>
+
+            <div class="property-group">
+                <h3>レイアウト</h3>
+                <div class="property-item">
+                    <label>表示:</label>
+                    <select id="display" disabled>
+                        <option value="">デフォルト</option>
+                        <option value="block">ブロック</option>
+                        <option value="inline">インライン</option>
+                        <option value="inline-block">インラインブロック</option>
+                        <option value="flex">フレックス</option>
+                        <option value="grid">グリッド</option>
+                        <option value="none">非表示</option>
+                    </select>
+                </div>
+                <div class="property-item">
+                    <label>幅:</label>
+                    <input type="text" id="width" placeholder="auto, 100px, 50%" disabled>
+                </div>
+                <div class="property-item">
+                    <label>高さ:</label>
+                    <input type="text" id="height" placeholder="auto, 100px, 50%" disabled>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script>
+        class VisualWebEditor {
+            constructor() {
+                this.currentTab = 'html';
+                this.code = {
+                    html: '<div class="container">\n  <h1>Hello World</h1>\n  <p class="description">This is a sample paragraph.</p>\n  <button class="btn-primary">Click Me</button>\n</div>',
+                    css: '.container {\n  padding: 20px;\n  background: #f0f0f0;\n}\n\nh1 {\n  color: #333;\n  font-size: 32px;\n}\n\n.description {\n  color: #666;\n  margin: 15px 0;\n}\n\n.btn-primary {\n  background: #007acc;\n  color: white;\n  padding: 10px 20px;\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n}\n\n.btn-primary:hover {\n  background: #005a9e;\n}',
+                    js: '// JavaScript code here\ndocument.querySelector(".btn-primary")?.addEventListener("click", () => {\n  alert("Button clicked!");\n});'
+                };
+                
+                this.selectedElement = null;
+                this.init();
+            }
+
+            init() {
+                this.setupEditor();
+                this.setupTabs();
+                this.setupPreview();
+                this.setupPropertyPanel();
+                this.setupToolbar();
+                this.updatePreview();
+            }
+
+            setupEditor() {
+                this.editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
+                    lineNumbers: true,
+                    theme: 'monokai',
+                    mode: 'htmlmixed',
+                    autoCloseTags: true,
+                    autoCloseBrackets: true,
+                    lineWrapping: true
+                });
+
+                this.editor.setValue(this.code[this.currentTab]);
+                
+                this.editor.on('change', () => {
+                    this.code[this.currentTab] = this.editor.getValue();
+                    this.updatePreview();
+                });
+            }
+
+            setupTabs() {
+                const tabs = document.querySelectorAll('.tab');
+                tabs.forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        tabs.forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        
+                        this.currentTab = tab.dataset.tab;
+                        this.editor.setValue(this.code[this.currentTab]);
+                        
+                        const modeMap = {
+                            html: 'htmlmixed',
+                            css: 'css',
+                            js: 'javascript'
+                        };
+                        this.editor.setOption('mode', modeMap[this.currentTab]);
+                    });
+                });
+            }
+
+            setupPreview() {
+                const preview = document.getElementById('preview');
+                const selector = document.getElementById('elementSelector');
+                const label = document.getElementById('elementLabel');
+
+                preview.addEventListener('load', () => {
+                    const previewDoc = preview.contentDocument;
+                    
+                    previewDoc.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        if (e.target === previewDoc.body) return;
+                        
+                        this.selectElement(e.target);
+                    });
+
+                    previewDoc.addEventListener('mouseover', (e) => {
+                        if (e.target === previewDoc.body || e.target === this.selectedElement) return;
+                        
+                        const rect = e.target.getBoundingClientRect();
+                        selector.style.display = 'block';
+                        selector.style.left = rect.left + 'px';
+                        selector.style.top = rect.top + 'px';
+                        selector.style.width = rect.width + 'px';
+                        selector.style.height = rect.height + 'px';
+                        
+                        label.textContent = e.target.tagName.toLowerCase() + 
+                            (e.target.className ? '.' + e.target.className : '') +
+                            (e.target.id ? '#' + e.target.id : '');
+                    });
+
+                    previewDoc.addEventListener('mouseout', () => {
+                        selector.style.display = 'none';
+                    });
+                });
+            }
+
+            selectElement(element) {
+                this.selectedElement = element;
+                document.getElementById('selectedElement').textContent = 
+                    element.tagName.toLowerCase() + 
+                    (element.className ? '.' + element.className : '') +
+                    (element.id ? '#' + element.id : '');
+
+                const computedStyle = window.getComputedStyle(element);
+                
+                // プロパティパネルの入力を有効化して値を設定
+                const inputs = document.querySelectorAll('.property-item input, .property-item select');
+                inputs.forEach(input => input.disabled = false);
+
+                // 現在のスタイルを取得して表示
+                document.getElementById('bgColor').value = this.rgbToHex(computedStyle.backgroundColor);
+                document.getElementById('textColor').value = this.rgbToHex(computedStyle.color);
+                document.getElementById('fontSize').value = parseInt(computedStyle.fontSize);
+                document.getElementById('padding').value = parseInt(computedStyle.padding);
+                document.getElementById('margin').value = parseInt(computedStyle.margin);
+                document.getElementById('borderWidth').value = parseInt(computedStyle.borderWidth);
+                document.getElementById('borderColor').value = this.rgbToHex(computedStyle.borderColor);
+                document.getElementById('borderRadius').value = parseInt(computedStyle.borderRadius);
+                document.getElementById('display').value = computedStyle.display === 'block' ? 'block' : 
+                                                          computedStyle.display === 'flex' ? 'flex' : 
+                                                          computedStyle.display === 'grid' ? 'grid' : '';
+                document.getElementById('width').value = computedStyle.width;
+                document.getElementById('height').value = computedStyle.height;
+            }
+
+            setupPropertyPanel() {
+                const properties = {
+                    bgColor: (value) => `background-color: ${value}`,
+                    textColor: (value) => `color: ${value}`,
+                    fontSize: (value) => `font-size: ${value}px`,
+                    padding: (value) => `padding: ${value}px`,
+                    margin: (value) => `margin: ${value}px`,
+                    borderWidth: (value) => `border-width: ${value}px`,
+                    borderColor: (value) => `border-color: ${value}`,
+                    borderRadius: (value) => `border-radius: ${value}px`,
+                    display: (value) => value ? `display: ${value}` : '',
+                    width: (value) => `width: ${value}`,
+                    height: (value) => `height: ${value}`
+                };
+
+                Object.keys(properties).forEach(prop => {
+                    const element = document.getElementById(prop);
+                    if (element) {
+                        element.addEventListener('input', () => {
+                            if (!this.selectedElement) return;
+                            
+                            const value = element.value;
+                            if (!value && prop !== 'display') return;
+                            
+                            this.applyStyleToElement(properties[prop](value));
+                        });
+                    }
+                });
+            }
+
+            applyStyleToElement(styleRule) {
+                if (!this.selectedElement) return;
+
+                const [property, value] = styleRule.split(':').map(s => s.trim());
+                this.selectedElement.style[this.toCamelCase(property)] = value;
+
+                // CSSコードを更新
+                this.updateCSSCode();
+            }
+
+            updateCSSCode() {
+                if (!this.selectedElement) return;
+
+                let selector = this.selectedElement.tagName.toLowerCase();
+                if (this.selectedElement.className) {
+                    selector = '.' + this.selectedElement.className.split(' ')[0];
+                } else if (this.selectedElement.id) {
+                    selector = '#' + this.selectedElement.id;
+                }
+
+                const styles = this.selectedElement.getAttribute('style');
+                if (!styles) return;
+
+                const cssRules = styles.split(';').filter(rule => rule.trim());
+                const formattedRules = cssRules.map(rule => '  ' + rule.trim()).join(';\n');
+
+                let currentCSS = this.code.css;
+                const selectorRegex = new RegExp(`${selector}\\s*{[^}]*}`, 'g');
+                
+                if (currentCSS.match(selectorRegex)) {
+                    currentCSS = currentCSS.replace(selectorRegex, `${selector} {\n${formattedRules};\n}`);
+                } else {
+                    currentCSS += `\n\n${selector} {\n${formattedRules};\n}`;
+                }
+
+                this.code.css = currentCSS;
+                if (this.currentTab === 'css') {
+                    this.editor.setValue(currentCSS);
+                }
+            }
+
+            setupToolbar() {
+                document.getElementById('runBtn').addEventListener('click', () => {
+                    this.updatePreview();
+                });
+
+                document.getElementById('clearBtn').addEventListener('click', () => {
+                    this.code = { html: '', css: '', js: '' };
+                    this.editor.setValue('');
+                    this.updatePreview();
+                });
+
+                document.getElementById('downloadBtn').addEventListener('click', () => {
+                    this.downloadCode();
+                });
+            }
+
+            updatePreview() {
+                const preview = document.getElementById('preview');
+                const htmlContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>${this.code.css}</style>
+                    </head>
+                    <body>
+                        ${this.code.html}
+                        <script>${this.code.js}<\/script>
+                    </body>
+                    </html>
+                `;
+                
+                preview.srcdoc = htmlContent;
+            }
+
+            downloadCode() {
+                const fullHTML = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generated Web App</title>
+    <style>
+${this.code.css}
+    </style>
+</head>
+<body>
+${this.code.html}
+    <script>
+${this.code.js}
+    </script>
+</body>
 </html>`;
-    const DEFAULT_CSS = `:root { --primary:#4cc9f0; --text:#222; }
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin:0; color:var(--text);}
-.hero { padding: 48px 24px; background: linear-gradient(120deg,#eef7ff,#f6fcff); text-align:center; }
-.hero h1 { font-size: 40px; margin: 0 0 8px; color:#14213d; }
-.btn { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 999px; font-weight:600; cursor:pointer; }
-.cards { display:grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 24px; }
-.card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; background: white; }
-.card h3 { margin: 0 0 6px; }`;
-    const DEFAULT_JS = `document.querySelectorAll('.btn').forEach(b=>{
-  b.addEventListener('click', ()=> alert('clicked!'));
-});`;
 
-    // --- 参照 ---
-    const htmlInput = document.getElementById('htmlInput');
-    const cssInput = document.getElementById('cssInput');
-    const jsInput = document.getElementById('jsInput');
-    const preview = document.getElementById('preview');
-    const btnInspect = document.getElementById('btnInspect');
-    const btnReload = document.getElementById('btnReload');
-    const btnFormat = document.getElementById('btnFormat');
-    const selMeta = document.getElementById('selMeta');
+                const blob = new Blob([fullHTML], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'index.html';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
 
-    // Style panel inputs
-    const $ = (id)=>document.getElementById(id);
-    const inputs = {
-      class: $('classInput'),
-      display: $('displayInput'),
-      color: $('colorInput'),
-      colorPicker: $('colorPicker'),
-      bg: $('bgInput'),
-      bgPicker: $('bgPicker'),
-      fontSize: $('fontSizeInput'),
-      width: $('widthInput'),
-      height: $('heightInput'),
-      mt: $('mtInput'), mr: $('mrInput'), mb: $('mbInput'), ml: $('mlInput'),
-      pt: $('ptInput'), pr: $('prInput'), pb: $('pbInput'), pl: $('plInput'),
-    };
+            rgbToHex(rgb) {
+                if (!rgb || rgb === 'transparent') return '#000000';
+                const result = rgb.match(/\d+/g);
+                if (!result) return '#000000';
+                return "#" + ((1 << 24) + (parseInt(result[0]) << 16) + (parseInt(result[1]) << 8) + parseInt(result[2])).toString(16).slice(1);
+            }
 
-    // --- 状態 ---
-    const state = {
-      doc: null,         // Document (解析後)
-      html: '', css: '', js: '',
-      inspect: false,
-      lastSelectedUid: null,
-      previewReady: false,
-      debounceTimer: null,
-    };
-
-    // --- ユーティリティ ---
-    const parser = new DOMParser();
-    function parseHTML(source) {
-      // DOMParserは不正なHTMLを補完します
-      return parser.parseFromString(source, 'text/html');
-    }
-    function ensureUids(doc) {
-      let counter = 1;
-      const walk = (node) => {
-        if (node.nodeType === 1) {
-          const el = node;
-          if (!el.hasAttribute('data-uid')) {
-            el.setAttribute('data-uid', 'u' + (counter++));
-          }
-          // script, style はそのまま通す（data-uid付けても害は無いが選択対象外）
-          for (const child of el.children) walk(child);
+            toCamelCase(str) {
+                return str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+            }
         }
-      };
-      if (doc.documentElement) walk(doc.documentElement);
-    }
-    function serialize(doc) {
-      // <!doctype html> を付与
-      return '<!doctype html>\n' + doc.documentElement.outerHTML;
-    }
-    function setToggle(el, on) {
-      el.dataset.on = on ? 'true' : 'false';
-      el.setAttribute('aria-checked', on ? 'true' : 'false');
-    }
-    function debounce(fn, ms=350) {
-      return (...args)=>{
-        clearTimeout(state.debounceTimer);
-        state.debounceTimer = setTimeout(()=>fn(...args), ms);
-      };
-    }
 
-    // --- プレビュー生成 ---
-    const INSPECTOR_JS = (function(){
-      // 文字列に展開するため関数内にソースを保持
-      return `
-(function(){
-  const post = (type, payload={})=> parent.postMessage({ source:'VISUAL', type, ...payload }, '*');
-  const S = { inspect:false, selected:null };
-  // overlay
-  const ov = document.createElement('div');
-  ov.id='__ov'; Object.assign(ov.style, {
-    position:'fixed', inset:'0', pointerEvents:'none', zIndex:'2147483647'
-  });
-  const box = document.createElement('div');
-  Object.assign(box.style, {
-    position:'absolute', border:'2px solid #42d392',
-    background:'rgba(66,211,146,.12)', boxShadow:'0 0 0 1px rgba(0,0,0,.2) inset',
-    display:'none'
-  });
-  ov.appendChild(box); document.documentElement.appendChild(ov);
-
-  function getEl(uid){ return document.querySelector('[data-uid="'+uid+'"]'); }
-  function hi(el){
-    if(!el){ box.style.display='none'; return; }
-    const r = el.getBoundingClientRect();
-    box.style.display='block';
-    box.style.left = r.left + 'px';
-    box.style.top = r.top + 'px';
-    box.style.width = r.width + 'px';
-    box.style.height = r.height + 'px';
-  }
-  const pick = ['color','backgroundColor','fontSize','fontWeight','fontFamily','display','width','height','marginTop','marginRight','marginBottom','marginLeft','paddingTop','paddingRight','paddingBottom','paddingLeft'];
-  function sendSel(el){
-    const cs = getComputedStyle(el);
-    const data = {};
-    for(const k of pick){ data[k] = cs[k]; }
-    post('INSPECT_SELECTION', {
-      uid: el.getAttribute('data-uid'),
-      meta: { tag: el.tagName.toLowerCase(), id: el.id || '', class: el.className || '' },
-      computed: data
-    });
-  }
-  function onMove(e){
-    if(!S.inspect) return;
-    const t = e.target.closest && e.target.closest('[data-uid]');
-    if(t){ hi(t); }
-  }
-  function onClick(e){
-    if(!S.inspect) return;
-    const t = e.target.closest && e.target.closest('[data-uid]');
-    if(!t) return;
-    e.preventDefault(); e.stopPropagation();
-    S.selected = t.getAttribute('data-uid');
-    hi(t); sendSel(t);
-  }
-  window.addEventListener('message', (e)=>{
-    const d = e.data||{};
-    if(d.type==='SET_INSPECT_MODE'){ S.inspect = !!d.value; if(!S.inspect){ hi(null); } }
-    if(d.type==='APPLY_TEMP_STYLE'){
-      const el = getEl(d.uid); if(el){ el.style.setProperty(d.prop, d.value); if(S.selected===d.uid) hi(el); }
-    }
-    if(d.type==='SELECT_BY_UID'){
-      const el = getEl(d.uid); if(el){ S.selected = d.uid; hi(el); sendSel(el); }
-    }
-  });
-  document.addEventListener('mousemove', onMove, true);
-  document.addEventListener('click', onClick, true);
-  post('INSPECT_READY', {});
-})();`;
-    })();
-
-    function injectUserAssets(doc, css, js) {
-      // head確保
-      const head = doc.querySelector('head') || doc.createElement('head');
-      if (!head.parentNode) doc.documentElement.insertBefore(head, doc.body);
-
-      // CSSをスタイルタグとして注入（差し替え）
-      let styleEl = doc.getElementById('__user_style');
-      if (!styleEl) {
-        styleEl = doc.createElement('style');
-        styleEl.id = '__user_style';
-        head.appendChild(styleEl);
-      }
-      styleEl.textContent = css || '';
-
-      // JSをscriptタグで注入（差し替え）
-      let scriptEl = doc.getElementById('__user_script');
-      if (!scriptEl) {
-        scriptEl = doc.createElement('script');
-        scriptEl.id = '__user_script';
-        head.appendChild(scriptEl);
-      }
-      scriptEl.textContent = js || '';
-
-      // インスペクタ注入（body末尾）
-      let insp = doc.getElementById('__inspector');
-      if (!insp) {
-        insp = doc.createElement('script');
-        insp.id = '__inspector';
-        doc.body.appendChild(insp);
-      }
-      insp.textContent = INSPECTOR_JS;
-    }
-
-    function buildPreviewHTML() {
-      // state.doc は常に最新（UID付き）
-      const cloned = parseHTML(serialize(state.doc)); // 深いクローンとして再パース
-      injectUserAssets(cloned, state.css, state.js);
-      const html = serialize(cloned);
-      return html;
-    }
-
-    function loadPreview() {
-      state.previewReady = false;
-      const html = buildPreviewHTML();
-      preview.srcdoc = html;
-      // インスペクタ準備完了は postMessage を待つ
-    }
-
-    // --- コード⇄UI同期 ---
-    function setStyleAttr(el, prop, value) {
-      const prev = el.getAttribute('style') || '';
-      const map = {};
-      prev.split(';').forEach(pair=>{
-        const [k,v] = pair.split(':');
-        if (k && v) map[k.trim()] = v.trim();
-      });
-      if (value === '' || value == null) {
-        delete map[prop];
-      } else {
-        map[prop] = value;
-      }
-      const next = Object.entries(map).map(([k,v])=> `${k}: ${v}`).join('; ');
-      if (next) el.setAttribute('style', next + ';');
-      else el.removeAttribute('style');
-    }
-
-    function updateElementStyle(uid, prop, value, tempOnly=false) {
-      // 一時的にプレビューへ適用（滑らかな反映）
-      if (state.previewReady) {
-        preview.contentWindow.postMessage({ type:'APPLY_TEMP_STYLE', uid, prop, value }, '*');
-      }
-      if (tempOnly) return;
-
-      // HTMLソースへ書き戻す
-      const el = state.doc.querySelector('[data-uid="'+uid+'"]');
-      if (!el) return;
-      setStyleAttr(el, prop, value);
-      // 再シリアライズでHTMLを更新
-      state.html = serialize(state.doc);
-      htmlInput.value = state.html;
-      // リビルド（デバウンス）
-      debouncedReload();
-    }
-
-    function updateElementClass(uid, classValue) {
-      const el = state.doc.querySelector('[data-uid="'+uid+'"]');
-      if (!el) return;
-      if (classValue) el.setAttribute('class', classValue);
-      else el.removeAttribute('class');
-      state.html = serialize(state.doc);
-      htmlInput.value = state.html;
-      debouncedReload();
-    }
-
-    // --- イベント ---
-    // タブ切り替え
-    document.querySelectorAll('.tab').forEach(tab=>{
-      tab.addEventListener('click', ()=>{
-        document.querySelectorAll('.tab').forEach(t=> t.dataset.active = 'false');
-        tab.dataset.active = 'true';
-        const name = tab.dataset.tab;
-        document.querySelectorAll('.editor').forEach(p=> p.dataset.active = (p.dataset.panel === name) ? 'true':'false');
-      });
-    });
-
-    // 入力ハンドラ
-    const debouncedReload = debounce(loadPreview, 400);
-    htmlInput.addEventListener('input', ()=>{
-      // 再パースしてUID付与（既存UIDは尊重）
-      state.html = htmlInput.value;
-      const doc = parseHTML(state.html);
-      // 既に付いている data-uid は維持、無い要素に付与
-      ensureUids(doc);
-      state.doc = doc;
-      debouncedReload();
-    });
-    cssInput.addEventListener('input', ()=>{
-      state.css = cssInput.value;
-      debouncedReload();
-    });
-    jsInput.addEventListener('input', ()=>{
-      state.js = jsInput.value;
-      debouncedReload();
-    });
-
-    // インスペクトトグル
-    btnInspect.addEventListener('click', ()=>{
-      state.inspect = !state.inspect;
-      setToggle(btnInspect, state.inspect);
-      if (state.previewReady) {
-        preview.contentWindow.postMessage({ type:'SET_INSPECT_MODE', value: state.inspect }, '*');
-      }
-    });
-
-    btnReload.addEventListener('click', ()=> loadPreview());
-    btnFormat.addEventListener('click', ()=>{
-      // DOMParser→serialize で整形（シンプルフォーマッタ）
-      const doc = parseHTML(state.html);
-      ensureUids(doc);
-      state.doc = doc;
-      state.html = serialize(doc);
-      htmlInput.value = state.html;
-      loadPreview();
-    });
-
-    // スタイルパネル → 反映
-    function bindInput(inp, handler) {
-      inp.addEventListener('input', handler);
-      inp.addEventListener('change', handler);
-    }
-
-    function setPanelValues(meta, computed) {
-      // メタ表示
-      selMeta.textContent = meta ? `${meta.tag}${meta.id ? '#'+meta.id:''}${meta.class ? '.'+meta.class.replace(/\s+/g,'.'):''} (uid: ${meta.uid||''})` : 'なし';
-      // 値設定（computedにはpxなどの既定値が入る）
-      inputs.class.value = meta.class || '';
-      inputs.display.value = cleanVal(computed.display);
-      inputs.color.value = asColorText(computed.color);
-      inputs.bg.value = asColorText(computed.backgroundColor);
-      try { inputs.colorPicker.value = toHex(computed.color) } catch {}
-      try { inputs.bgPicker.value = toHex(computed.backgroundColor) } catch {}
-      inputs.fontSize.value = parseInt(computed.fontSize) || '';
-      inputs.width.value = cleanVal(computed.width);
-      inputs.height.value = cleanVal(computed.height);
-      inputs.mt.value = cleanVal(computed.marginTop);
-      inputs.mr.value = cleanVal(computed.marginRight);
-      inputs.mb.value = cleanVal(computed.marginBottom);
-      inputs.ml.value = cleanVal(computed.marginLeft);
-      inputs.pt.value = cleanVal(computed.paddingTop);
-      inputs.pr.value = cleanVal(computed.paddingRight);
-      inputs.pb.value = cleanVal(computed.paddingBottom);
-      inputs.pl.value = cleanVal(computed.paddingLeft);
-    }
-
-    function cleanVal(v) {
-      if (!v) return '';
-      if (v === '0px') return '0';
-      if (v === 'auto') return 'auto';
-      return v;
-    }
-    function asColorText(v) { return v || ''; }
-    function toHex(color){
-      // 極めて簡易的: rgb(a)→hex（a無視）
-      const m = color && color.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/i);
-      if (!m) return '#000000';
-      const r = (+m[1]).toString(16).padStart(2,'0');
-      const g = (+m[2]).toString(16).padStart(2,'0');
-      const b = (+m[3]).toString(16).padStart(2,'0');
-      return '#'+r+g+b;
-    }
-
-    // パネル: イベント束縛（選択中UIDに対して更新）
-    function bindStylePanel() {
-      bindInput(inputs.class, ()=>{
-        if (!state.lastSelectedUid) return;
-        updateElementClass(state.lastSelectedUid, inputs.class.value);
-      });
-      bindInput(inputs.display, ()=>{
-        if (!state.lastSelectedUid) return;
-        const v = inputs.display.value;
-        updateElementStyle(state.lastSelectedUid, 'display', v);
-      });
-      bindInput(inputs.color, ()=>{
-        if (!state.lastSelectedUid) return;
-        const v = inputs.color.value;
-        updateElementStyle(state.lastSelectedUid, 'color', v);
-      });
-      bindInput(inputs.colorPicker, ()=>{
-        if (!state.lastSelectedUid) return;
-        const v = inputs.colorPicker.value;
-        inputs.color.value = v;
-        updateElementStyle(state.lastSelectedUid, 'color', v);
-      });
-      bindInput(inputs.bg, ()=>{
-        if (!state.lastSelectedUid) return;
-        const v = inputs.bg.value;
-        updateElementStyle(state.lastSelectedUid, 'background-color', v);
-      });
-      bindInput(inputs.bgPicker, ()=>{
-        if (!state.lastSelectedUid) return;
-        const v = inputs.bgPicker.value;
-        inputs.bg.value = v;
-        updateElementStyle(state.lastSelectedUid, 'background-color', v);
-      });
-      bindInput(inputs.fontSize, ()=>{
-        if (!state.lastSelectedUid) return;
-        const v = inputs.fontSize.value ? inputs.fontSize.value + 'px' : '';
-        updateElementStyle(state.lastSelectedUid, 'font-size', v);
-      });
-      bindInput(inputs.width, ()=>{
-        if (!state.lastSelectedUid) return;
-        updateElementStyle(state.lastSelectedUid, 'width', inputs.width.value);
-      });
-      bindInput(inputs.height, ()=>{
-        if (!state.lastSelectedUid) return;
-        updateElementStyle(state.lastSelectedUid, 'height', inputs.height.value);
-      });
-      for (const [key, cssProp] of Object.entries({mt:'margin-top', mr:'margin-right', mb:'margin-bottom', ml:'margin-left', pt:'padding-top', pr:'padding-right', pb:'padding-bottom', pl:'padding-left'})) {
-        bindInput(inputs[key], ()=>{
-          if (!state.lastSelectedUid) return;
-          updateElementStyle(state.lastSelectedUid, cssProp, inputs[key].value);
+        // アプリケーションの初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            new VisualWebEditor();
         });
-      }
-    }
-
-    // --- postMessage 受信 ---
-    window.addEventListener('message', (e)=>{
-      const d = e.data || {};
-      if (d.source !== 'VISUAL') return;
-      if (d.type === 'INSPECT_READY') {
-        state.previewReady = true;
-        // インスペクト状態と選択復元
-        preview.contentWindow.postMessage({ type:'SET_INSPECT_MODE', value: state.inspect }, '*');
-        if (state.lastSelectedUid) {
-          preview.contentWindow.postMessage({ type:'SELECT_BY_UID', uid: state.lastSelectedUid }, '*');
-        }
-      }
-      if (d.type === 'INSPECT_SELECTION') {
-        state.lastSelectedUid = d.uid;
-        const meta = { ...d.meta, uid: d.uid };
-        setPanelValues(meta, d.computed);
-        selMeta.textContent = `${meta.tag}${meta.id ? '#'+meta.id:''}${meta.class ? '.'+meta.class.replace(/\s+/g,'.'):''} (uid: ${meta.uid})`;
-      }
-    });
-
-    // --- 初期化 ---
-    function init() {
-      htmlInput.value = DEFAULT_HTML;
-      cssInput.value = DEFAULT_CSS;
-      jsInput.value = DEFAULT_JS;
-
-      state.html = htmlInput.value;
-      state.css = cssInput.value;
-      state.js = jsInput.value;
-
-      const doc = parseHTML(state.html);
-      ensureUids(doc);
-      state.doc = doc;
-      state.html = serialize(doc);
-      htmlInput.value = state.html;
-
-      bindStylePanel();
-      loadPreview();
-      setToggle(btnInspect, state.inspect);
-    }
-    init();
-  </script>
+    </script>
 </body>
 </html>
