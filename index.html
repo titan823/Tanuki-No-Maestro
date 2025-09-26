@@ -713,7 +713,7 @@
                             <label>半径 <input type="number" id="paintEraserRadius" min="1" max="256" value="16" style="width:60px !important"></label>
                             <label class="row small"><input type="checkbox" id="paintSmartEraser"> スマート</label>
                             <label>許容 <input type="number" id="paintSmartTol" min="0" max="255" value="28" style="width:60px !important"></label>
-                            <label>到達半径 <input type="number" id="paintSmartMaxR" min="1" max="2048" value="64" style="width:70px !important"></label>
+                            <label>到達半径 <input type="number" id="paintSmartMaxR" min="1" max="4096" value="64" style="width:70px !important"></label>
                             <label>エッジ感度 <input type="number" id="paintSmartEdge" min="0" max="255" value="40" style="width:70px !important"></label>
                             <label>フェザー(px) <input type="number" id="paintSmartFeather" min="0" max="8" step="0.5" value="1.5" style="width:70px !important"></label>
                             <label>モード
@@ -736,20 +736,13 @@
                     </div>
                     <!-- ★スマート操作調整パネル（新UI） -->
                     <div id="smartAdjustmentPanel" class="smart-adjust-panel" style="display:none;">
-                        <div class="smart-adjust-header">
-                            <span class="smart-adjust-title">スマート操作の調整</span>
-                        </div>
-                        <div class="smart-history-selector row small">
-                            <label for="smartHistorySelect" class="small">履歴:</label>
-                            <select id="smartHistorySelect" class="small" style="flex: 1; width: auto !important;"></select>
-                        </div>
                         <div class="smart-adjust-controls row small">
                             <label for="smartAdjustSlider" class="small">強度:</label>
-                            <input type="range" id="smartAdjustSlider" min="0" max="100" step="1" value="50" style="width: 140px;">
-                            <span id="smartAdjustValue" class="small muted">50</span>
+                            <input type="range" id="smartAdjustSlider" min="1" max="1000" step="1" value="100" style="width: 220px;">
+                            <span id="smartAdjustValue" class="small muted">100</span>
                         </div>
                         <div class="muted extra-small" style="margin-top:4px;">
-                          選択した履歴の強度を再調整できます。
+                          強度は「許容」「エッジ感度」「到達半径」に倍率として反映されます（100=等倍）。
                         </div>
                     </div>
                     <div class="row small" style="justify-content:space-between; align-items:center; margin-top:6px;">
@@ -2020,7 +2013,6 @@
       paintEraserTiming: $('#paintEraserTiming'),
       // ★スマート調整パネルのUI要素
       smartAdjustmentPanel: $('#smartAdjustmentPanel'),
-      smartHistorySelect: $('#smartHistorySelect'),
       smartAdjustSlider: $('#smartAdjustSlider'),
       smartAdjustValue: $('#smartAdjustValue'),
       // GIF品質向上UI
@@ -2063,6 +2055,7 @@
 
 
 
+
                 $$('input', ui.gifMergeOptions).forEach(el => el.disabled = !ui.gifMergeEnabled.checked);
             }
         };
@@ -2083,58 +2076,7 @@
     const gifFEState = { idx: 0 };
     const gifUndoHistory = new Map();
     const pngPaintHistory = new Map();
-    // ★スマート操作履歴管理システム
-    const smartOperationHistory = {
-        histories: new Map(), // layerId -> operation[]
-        maxHistoryPerLayer: 10,
-        currentSelection: null, // { layerId, operationId }
-
-        recordOperation(layerId, operation) {
-            if (!this.histories.has(layerId)) {
-                this.histories.set(layerId, []);
-            }
-            const history = this.histories.get(layerId);
-            const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
-            const record = {
-                id: operationId,
-                type: operation.type, // 'erase', 'fill', etc.
-                params: operation.params,
-                adjustmentFactor: operation.adjustmentFactor || 50,
-                imageData: operation.imageData, // 元のImageData
-                bounds: operation.bounds, // {x0, y0, width, height}
-                metadata: operation.metadata || {}
-            };
-            history.push(record);
-
-            if (history.length > this.maxHistoryPerLayer) {
-                history.shift();
-            }
-            this.currentSelection = { layerId, operationId };
-            return operationId;
-        },
-
-        getOperation(layerId, operationId) {
-            const history = this.histories.get(layerId);
-            return history ? history.find(op => op.id === operationId) : null;
-        },
-        
-        getLayerHistory(layerId) {
-            return this.histories.get(layerId) || [];
-        },
-
-        updateAdjustment(layerId, operationId, factor) {
-            const op = this.getOperation(layerId, operationId);
-            if (op) op.adjustmentFactor = factor;
-        },
-
-        clearLayerHistory(layerId) {
-            this.histories.delete(layerId);
-            if (this.currentSelection?.layerId === layerId) {
-                this.currentSelection = null;
-            }
-        }
-    };
+    
     const UNDO_HISTORY_MAX = 20;
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
@@ -2252,7 +2194,6 @@
       
       gifUndoHistory.delete(id);
       pngPaintHistory.delete(id);
-      smartOperationHistory.clearLayerHistory(id); // ★スマート履歴も削除
       layers = layers.filter(l => l.id !== id);
       
       if (selectedId === id) {
@@ -4751,23 +4692,27 @@
         pendingFill: null,
         pointers: new Map(),
         pinch: { active: false, startDist: 0, startZoom: 1, focalImgX: 0, focalImgY: 0 },
-        // ★レイアウトキャッシュを追加
         layout: { containerW: 0, containerH: 0, scaledW: 0, scaledH: 0 },
       };
       
-      // ★動的デフォルト半径計算
       function calculateDefaultSmartRadius(canvas) {
           if (!canvas) return 100;
           const diagonal = Math.hypot(canvas.width, canvas.height);
           const defaultRadius = Math.round(diagonal * 0.5);
-          return Math.max(100, Math.min(2048, defaultRadius));
+          return Math.max(100, Math.min(4096, defaultRadius));
       }
 
+      function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
       function scaleSmartParams(base, factor) {
-        const k = 0.5 + (factor / 100); // 0.5 to 1.5
-        const tol = Math.max(1, Math.min(255, Math.round(base.tol * k)));
-        const edge = Math.max(1, Math.min(255, Math.round(base.edge * k)));
-        return { ...base, tol, edge };
+        const f = Math.max(1, factor) / 100;
+        const kTolEdge = f;
+        const kR = Math.sqrt(f);
+        const tol = clamp(Math.round(base.tol * kTolEdge), 0, 255);
+        const edge = clamp(Math.round(base.edge * kTolEdge), 0, 255);
+        const maxR = clamp(Math.round(base.maxR * kR), 1, 4096);
+        const feather = base.feather;
+        return { tol, edge, maxR, feather, mode: base.mode };
       }
       
       function computeSmartMaskFromImageData(img, tw, th, sx, sy, opts) {
@@ -4822,136 +4767,66 @@
         return mask;
       }
       
-      // ★スマート操作の適用ロジック
-      function applySmartOperation(tgt, operationId, adjustmentFactor) {
-          const operation = smartOperationHistory.getOperation(tgt.layer.id, operationId);
-          if (!operation) return;
-
-          const cnv = tgt.canvas;
-          const ctx = cnv.getContext('2d');
-          const { x0, y0, width, height } = operation.bounds;
-
-          ctx.putImageData(operation.imageData, x0, y0);
-
-          const scaledParams = scaleSmartParams(operation.params, adjustmentFactor);
-          const sx = operation.params.seedX - x0;
-          const sy = operation.params.seedY - y0;
-          
-          const mask = computeSmartMaskFromImageData(operation.imageData, width, height, sx, sy, scaledParams);
-          
-          const mcv = document.createElement('canvas');
-          mcv.width = width; mcv.height = height;
-          const mctx = mcv.getContext('2d');
-          const mid = mctx.createImageData(width, height);
-          for (let p = 0; p < width * height; p++) {
-              const a = mask[p] ? 255 : 0;
-              mid.data.set([255, 255, 255, a], p * 4);
-          }
-          mctx.putImageData(mid, 0, 0);
-
-          ctx.save();
-          ctx.globalCompositeOperation = 'destination-out';
-          if (scaledParams.feather > 0) ctx.filter = `blur(${scaledParams.feather}px)`;
-          ctx.drawImage(mcv, x0, y0);
-          ctx.restore();
-
-          smartOperationHistory.updateAdjustment(tgt.layer.id, operationId, adjustmentFactor);
-          
-          if (tgt.kind === 'gif') rebuildGifThumbnails(tgt.layer);
-      }
-
-      // ★スマート調整UIの更新ロジック
-      function updateSmartAdjustmentUI(layerId, currentOperationId) {
-          const panel = ui.smartAdjustmentPanel;
-          if (!panel) return;
-          
-          const history = smartOperationHistory.getLayerHistory(layerId);
-          const select = ui.smartHistorySelect;
-          const slider = ui.smartAdjustSlider;
-          const valueLabel = ui.smartAdjustValue;
-          
-          select.innerHTML = '';
-          history.slice().reverse().forEach((op, index) => {
-              const option = document.createElement('option');
-              option.value = op.id;
-              const time = new Date(op.metadata.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-              option.textContent = `${history.length - index}. ${op.type} @ ${time} (${op.adjustmentFactor}%)`;
-              if (op.id === currentOperationId) {
-                  option.selected = true;
-              }
-              select.appendChild(option);
-          });
-          
-          const currentOp = smartOperationHistory.getOperation(layerId, currentOperationId);
-          if (currentOp) {
-              slider.value = currentOp.adjustmentFactor;
-              valueLabel.textContent = currentOp.adjustmentFactor;
-              panel.style.display = 'block';
-          } else {
-              panel.style.display = 'none';
-          }
-      }
-
-      // ★スマート消去実行時の処理
       function smartEraseRegion(tgt, ix, iy, opts) {
         const cnv = tgt.canvas;
         const w = cnv.width, h = cnv.height;
         
-        const effectiveMaxR = opts.maxR || calculateDefaultSmartRadius(cnv);
-
-        const x0 = Math.max(0, ix - effectiveMaxR);
-        const y0 = Math.max(0, iy - effectiveMaxR);
-        const x1 = Math.min(w, ix + effectiveMaxR);
-        const y1 = Math.min(h, iy + effectiveMaxR);
+        const x0 = Math.max(0, ix - opts.maxR);
+        const y0 = Math.max(0, iy - opts.maxR);
+        const x1 = Math.min(w, ix + opts.maxR);
+        const y1 = Math.min(h, iy + opts.maxR);
         const tw = x1 - x0;
         const th = y1 - y0;
 
         const ctx = cnv.getContext('2d');
         const base = ctx.getImageData(x0, y0, tw, th);
         
-        const operationId = smartOperationHistory.recordOperation(tgt.layer.id, {
-            type: 'erase',
-            params: { ...opts, maxR: effectiveMaxR, seedX: ix, seedY: iy },
-            adjustmentFactor: 50,
-            imageData: base,
-            bounds: { x0, y0, width: tw, height: th },
-            metadata: { frameIndex: tgt.kind === 'gif' ? tgt.idx : null, timestamp: Date.now() }
-        });
+        const sx = ix - x0;
+        const sy = iy - y0;
+        const mask = computeSmartMaskFromImageData(base, tw, th, sx, sy, opts);
         
-        applySmartOperation(tgt, operationId, 50);
-        updateSmartAdjustmentUI(tgt.layer.id, operationId);
+        const mcv = document.createElement('canvas');
+        mcv.width = tw; mcv.height = th;
+        const mctx = mcv.getContext('2d');
+        const mid = mctx.createImageData(tw, th);
+        for (let p = 0; p < tw * th; p++) {
+            const a = mask[p] ? 255 : 0;
+            mid.data.set([255, 255, 255, a], p * 4);
+        }
+        mctx.putImageData(mid, 0, 0);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        if (opts.feather > 0) ctx.filter = `blur(${opts.feather}px)`;
+        ctx.drawImage(mcv, x0, y0);
+        ctx.restore();
+      }
+
+      function updateSmartPanelVisibility() {
+        if (!ui.smartAdjustmentPanel) return;
+        ui.smartAdjustmentPanel.style.display = ui.paintSmartEraser?.checked ? 'block' : 'none';
+      }
+      ui.paintSmartEraser?.addEventListener('change', updateSmartPanelVisibility);
+      updateSmartPanelVisibility();
+
+      {
+        const saved = localStorage.getItem('smartAdjustStrength');
+        if (ui.smartAdjustSlider) {
+          if (saved) {
+            ui.smartAdjustSlider.value = saved;
+            if (ui.smartAdjustValue) ui.smartAdjustValue.textContent = saved;
+          } else {
+            ui.smartAdjustSlider.value = '100';
+            if (ui.smartAdjustValue) ui.smartAdjustValue.textContent = '100';
+          }
+          ui.smartAdjustSlider.addEventListener('input', () => {
+            const v = ui.smartAdjustSlider.value;
+            if (ui.smartAdjustValue) ui.smartAdjustValue.textContent = v;
+            localStorage.setItem('smartAdjustStrength', v);
+          });
+        }
       }
       
-      // ★調整UIのイベントリスナー
-      ui.smartHistorySelect?.addEventListener('change', () => {
-          const selection = smartOperationHistory.currentSelection;
-          if (!selection) return;
-          const selectedId = ui.smartHistorySelect.value;
-          smartOperationHistory.currentSelection.operationId = selectedId;
-          const op = smartOperationHistory.getOperation(selection.layerId, selectedId);
-          if (op) {
-              ui.smartAdjustSlider.value = op.adjustmentFactor;
-              ui.smartAdjustValue.textContent = op.adjustmentFactor;
-              const tgt = getPaintTarget();
-              if (tgt) {
-                  applySmartOperation(tgt, selectedId, op.adjustmentFactor);
-                  drawPaintView(tgt.canvas, { noLayout: true });
-              }
-          }
-      });
-      ui.smartAdjustSlider?.addEventListener('input', () => {
-          const factor = Number(ui.smartAdjustSlider.value);
-          ui.smartAdjustValue.textContent = factor;
-          const selection = smartOperationHistory.currentSelection;
-          if (selection) {
-              const tgt = getPaintTarget();
-              if (tgt) {
-                  applySmartOperation(tgt, selection.operationId, factor);
-                  drawPaintView(tgt.canvas, { noLayout: true });
-              }
-          }
-      });
-
       const savedOE = localStorage.getItem('paintTouchOffsetEnabled');
       const savedOP = localStorage.getItem('paintTouchOffsetPx');
       paintState.offsetEnabled = (savedOE === null) ? true : (savedOE === '1');
@@ -5078,7 +4953,6 @@
           return null;
       }
       
-      // ★ drawPaintView の改修
       function drawPaintView(srcCanvas, options = {}) {
           const { noLayout = false } = options;
           const pc = ui.paintCanvas;
@@ -5133,10 +5007,7 @@
           }
       }
       
-      const originalSyncPaintPanel = window.syncPaintPanel;
       window.syncPaintPanel = function() {
-          if (originalSyncPaintPanel) originalSyncPaintPanel();
-
           const tgt = getPaintTarget();
           const isPng = tgt && tgt.kind === 'png';
           ui.paintApplyToPng.disabled = !isPng;
@@ -5145,32 +5016,21 @@
           if (!tgt) {
               ui.paintTargetInfo.textContent = '対象: -';
               drawPaintView(null);
-              if (ui.smartAdjustmentPanel) ui.smartAdjustmentPanel.style.display = 'none';
-              return;
-          }
-
-          if (tgt.kind === 'gif') {
-              const N = tgt.layer.gif.frames.length;
-              const i = (frameLock.enabled && frameLock.layerId === tgt.layer.id) ? frameLock.idx : gifFEState.idx | 0;
-              ui.paintTargetInfo.textContent = `対象: GIFフレーム ${i + 1}/${N}`;
           } else {
-              ui.paintTargetInfo.textContent = `対象: PNG (原寸 ${tgt.canvas.width}×${tgt.canvas.height})`;
+              if (tgt.kind === 'gif') {
+                  const N = tgt.layer.gif.frames.length;
+                  const i = (frameLock.enabled && frameLock.layerId === tgt.layer.id) ? frameLock.idx : gifFEState.idx | 0;
+                  ui.paintTargetInfo.textContent = `対象: GIFフレーム ${i + 1}/${N}`;
+              } else {
+                  ui.paintTargetInfo.textContent = `対象: PNG (原寸 ${tgt.canvas.width}×${tgt.canvas.height})`;
+              }
+              if (ui.paintSmartMaxR && !localStorage.getItem('paintSmartMaxR_set')) {
+                  ui.paintSmartMaxR.value = calculateDefaultSmartRadius(tgt.canvas);
+              }
+              drawPaintView(tgt.canvas);
           }
-          
-          if (ui.paintSmartMaxR && !localStorage.getItem('paintSmartMaxR_set')) {
-              ui.paintSmartMaxR.value = calculateDefaultSmartRadius(tgt.canvas);
-          }
-          
-          const history = smartOperationHistory.getLayerHistory(tgt.layer.id);
-          if (history.length > 0) {
-              const lastOpId = smartOperationHistory.currentSelection?.operationId || history[history.length - 1].id;
-              updateSmartAdjustmentUI(tgt.layer.id, lastOpId);
-          } else {
-              if (ui.smartAdjustmentPanel) ui.smartAdjustmentPanel.style.display = 'none';
-          }
-
-          drawPaintView(tgt.canvas);
           updatePaintUndoUI(tgt);
+          updateSmartPanelVisibility();
       }
       
       function drawOffsetMarker(pctx) {
@@ -5234,8 +5094,6 @@
           };
       };
 
-
-
       
       $$('#paintSection .btn[id^="paintTool"]').forEach(btn => {
         btn.addEventListener('click', () => setActiveTool(btn.id.replace('paintTool', '').toLowerCase()));
@@ -5275,28 +5133,21 @@
         eraser: (tgt, x, y, lastX, lastY) => {
           const smartOn = !!ui.paintSmartEraser?.checked;
           const timing = ui.paintEraserTiming?.value || 'onRelease';
+          const factor = parseInt(ui.smartAdjustSlider?.value || '100', 10);
 
-          if (smartOn && timing === 'onPress') {
-              const dx = x - (lastX ?? x), dy = y - (lastY ?? y);
-              const minStep = 6;
-              if (lastX !== undefined && (dx*dx + dy*dy) < (minStep*minStep)) return;
-          }
-          
           if (smartOn) {
             if ((timing === 'onPress' && paintState.isPointerDown) || (timing === 'onRelease' && !paintState.isPointerDown)) {
-                const opts = {
+                const baseOpts = {
                   tol: Math.max(0, Math.min(255, parseInt(ui.paintSmartTol?.value)||28)),
-                  maxR: Math.max(1, Math.min(2048, parseInt(ui.paintSmartMaxR?.value)||64)),
+                  maxR: Math.max(1, Math.min(4096, parseInt(ui.paintSmartMaxR?.value)||64)),
                   edge: Math.max(0, Math.min(255, parseInt(ui.paintSmartEdge?.value)||40)),
                   feather: Math.max(0, parseFloat(ui.paintSmartFeather?.value)||0),
                   mode: ui.paintSmartMode?.value || 'connected'
                 };
-                smartEraseRegion(tgt, x, y, opts);
-                return;
+                const scaled = scaleSmartParams(baseOpts, factor);
+                smartEraseRegion(tgt, x, y, scaled);
             }
-          }
-
-          if (!smartOn) {
+          } else {
             const r = parseInt(ui.paintEraserRadius.value) || 10;
             const ctx = tgt.canvas.getContext('2d');
             ctx.save();
@@ -5400,8 +5251,6 @@
         return { x: e.clientX - r.left, y: e.clientY - r.top };
       }
 
-      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
       function imageToViewCoords(ix, iy) {
         const cont = ui.paintCanvasContainer;
         const vx = paintState.drawX + ix * paintState.drawScale - cont.scrollLeft;
@@ -5497,16 +5346,17 @@
                   if (target.kind === 'gif') rebuildGifThumbnails(target.layer);
                   paintState.pendingFill = null;
               }
-              // ★スマート消しゴムの onRelease 処理
               if (paintState.activeTool === 'eraser' && ui.paintSmartEraser?.checked && ui.paintEraserTiming?.value === 'onRelease') {
-                  const opts = {
+                  const factor = parseInt(ui.smartAdjustSlider?.value || '100', 10);
+                  const baseOpts = {
                     tol: Math.max(0, Math.min(255, parseInt(ui.paintSmartTol?.value)||28)),
-                    maxR: Math.max(1, Math.min(2048, parseInt(ui.paintSmartMaxR?.value)||64)),
+                    maxR: Math.max(1, Math.min(4096, parseInt(ui.paintSmartMaxR?.value)||64)),
                     edge: Math.max(0, Math.min(255, parseInt(ui.paintSmartEdge?.value)||40)),
                     feather: Math.max(0, parseFloat(ui.paintSmartFeather?.value)||0),
                     mode: ui.paintSmartMode?.value || 'connected'
                   };
-                  smartEraseRegion(tgt, paintState.lastX, paintState.lastY, opts);
+                  const scaled = scaleSmartParams(baseOpts, factor);
+                  smartEraseRegion(tgt, paintState.lastX, paintState.lastY, scaled);
                   drawPaintView(tgt.canvas, { noLayout: true });
               }
           }
@@ -5684,7 +5534,6 @@
                 res.canvas.getContext('2d').putImageData(res.originalImageData, 0, 0);
                 res.dirty = false;
                 pngPaintHistory.delete(selectedId);
-                smartOperationHistory.clearLayerHistory(selectedId);
                 syncPaintPanel();
             }
         }
@@ -6337,7 +6186,7 @@
           for (let time = this.state.trimStart; time <= this.state.trimEnd; time += frameTime) {
             await this.seekTo(time);
             const canvas = document.createElement('canvas');
-            canvas.width = this.state.editVideo.videoWidth;
+            canvas.width = this.state.videoWidth;
             canvas.height = this.state.editVideo.videoHeight;
             canvas.getContext('2d').drawImage(this.state.editVideo, 0, 0);
             frames.push({ canvas, delay: frameTime });
