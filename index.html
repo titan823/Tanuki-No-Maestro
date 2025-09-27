@@ -2431,8 +2431,9 @@
       }
       const layerId = crypto.randomUUID();
       resourceManager.saveGifResource(layerId, { frames, cumul, duration });
-      addLayer({ id: layerId, type:'gif', name, visible:true, opacity:1, x:0, y:0, w:W, h:H, origW: W, origH: H, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, gif: { frames, cumul, duration } });
+      addLayer({ id: layerId, type:'gif', name, visible:true, opacity:1, x:0, y:0, w:W, h:H, origW: W, origH: H, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, gif: resourceManager.getGifResource(layerId) });
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
+
     }
 
     async function loadVideoLayer(name, file) {
