@@ -2056,6 +2056,7 @@
 
 
 
+
                 $$('input', ui.gifMergeOptions).forEach(el => el.disabled = !ui.gifMergeEnabled.checked);
             }
         };
@@ -2077,6 +2078,10 @@
     const gifUndoHistory = new Map();
     const pngPaintHistory = new Map();
     
+    // ★★★★★ 修正点: lastSmartOpをグローバルスコープに移動 ★★★★★
+    const lastSmartOp = new Map();
+    // ★★★★★ 修正ここまで ★★★★★
+
     const UNDO_HISTORY_MAX = 20;
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
@@ -2356,20 +2361,23 @@
     ui.fileInput.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
       for (const file of files) {
-        const buf = await file.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        const isGIF = bytes[0]===0x47 && bytes[1]===0x49 && bytes[2]===0x46;
-        const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|og[gv])$/i.test(file.name);
+        try {
+            const buf = await file.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            const isGIF = bytes[0]===0x47 && bytes[1]===0x49 && bytes[2]===0x46;
+            const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|og[gv])$/i.test(file.name);
 
-        if (isVideo) {
-            try { await loadVideoLayer(file.name, file); }
-            catch (err) { console.error(err); alert('動画の読み込みに失敗: ' + err.message); }
-        } else if (isGIF) {
-          try { await loadGifLayer(file.name, buf); }
-          catch (err) { console.error(err); alert('GIF読み込みに失敗: '+err.message); }
-        } else {
-          try { await loadPngLayer(file.name, buf); }
-          catch (err) { console.error(err); alert('PNG読み込みに失敗: '+err.message); }
+            if (isVideo) {
+                await loadVideoLayer(file.name, file);
+            } else if (isGIF) {
+                await loadGifLayer(file.name, buf);
+            } else {
+                await loadPngLayer(file.name, buf);
+            }
+        } catch (err) {
+            console.error(err);
+            const type = file.type.startsWith('video/') ? '動画' : file.type.startsWith('image/gif') ? 'GIF' : 'PNG';
+            alert(`${type}読み込みに失敗: ` + (err.message || String(err)));
         }
       }
       ui.fileInput.value = '';
@@ -3695,7 +3703,7 @@
         amp:  Number(ui.motionAmp.value)||0,
         speed:Number(ui.motionSpeed.value)||1.0,
         intensity: Number(ui.motionIntensity.value) || 50,
-        random: Number(ui.motionRandom.value) || 0,
+                random: Number(ui.motionRandom.value) || 0,
         easing: ui.motionEasing.value || 'sine',
         period: (period>0 ? period : 0),
         rot:  Number(ui.motionRot.value)||0,
@@ -4699,8 +4707,9 @@
         layout: { containerW: 0, containerH: 0, scaledW: 0, scaledH: 0 },
       };
       
-      const lastSmartOp = new Map();
-      
+      // ★★★★★ 修正点: ペイント機能内のlastSmartOp宣言を削除 ★★★★★
+      // const lastSmartOp = new Map(); // この行を削除
+
       function calculateDefaultSmartRadius(canvas) {
           if (!canvas) return 100;
           const diagonal = Math.hypot(canvas.width, canvas.height);
@@ -5152,6 +5161,7 @@
               y: Math.floor(sy)
           };
       };
+
 
       
       $$('#paintSection .btn[id^="paintTool"]').forEach(btn => {
@@ -6397,7 +6407,10 @@
       originalRefresh(...args);
       syncVideoFrameEditor();
       syncGifFrameEditor();
-      lastSmartOp.clear();
+      // ★★★★★ 修正点: lastSmartOpの参照を安全にする ★★★★★
+      if (typeof lastSmartOp !== 'undefined') {
+        lastSmartOp.clear();
+      }
     };
 
     document.addEventListener('DOMContentLoaded', () => {
