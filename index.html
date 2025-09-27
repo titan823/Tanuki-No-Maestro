@@ -2429,12 +2429,12 @@
           base = work;
         }
       }
-      const cumul = []; let acc=0; for (const f of frames){ cumul.push(acc); acc+=f.delay; }
       const layerId = crypto.randomUUID();
       resourceManager.saveGifResource(layerId, { frames, cumul, duration });
-      addLayer({ id: layerId, type:'gif', name, visible:true, opacity:1, x:0, y:0, w:W, h:H, origW: W, origH: H, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, gif: {} });
+      addLayer({ id: layerId, type:'gif', name, visible:true, opacity:1, x:0, y:0, w:W, h:H, origW: W, origH: H, rot:0, flipX:false, userScaleX:1, userScaleY:1, userRot:0, gif: { frames, cumul, duration } });
       if (ui.autoFromGifs?.checked) recalcAutoFromGifs();
     }
+
     async function loadVideoLayer(name, file) {
         const url = URL.createObjectURL(file);
         const video = document.createElement('video');
