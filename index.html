@@ -480,6 +480,7 @@
       -webkit-overflow-scrolling: touch;
       scrollbar-width: thin;
       scrollbar-color: var(--border) transparent;
+      scrollbar-gutter: stable; /* ★揺れ防止 */
     }
     #paintCanvasContainer::-webkit-scrollbar {
       width: 6px;
@@ -494,6 +495,25 @@
     }
     .muted.extra-small {
         font-size: 10px;
+    }
+    /* === ★スマート操作調整パネルのスタイル === */
+    .smart-adjust-panel {
+        margin-top: 8px;
+        padding: 8px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+    }
+    .smart-adjust-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+    }
+    .smart-adjust-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
     }
     /* === GIF出力オプションのdisabledスタイル === */
     .gif-merge-options:disabled {
@@ -691,11 +711,46 @@
                         </span>
                         <span id="eraserOpts" class="tool-options">
                             <label>半径 <input type="number" id="paintEraserRadius" min="1" max="256" value="16" style="width:60px !important"></label>
+                            <label class="row small"><input type="checkbox" id="paintSmartEraser"> スマート</label>
+                            <label>許容 <input type="number" id="paintSmartTol" min="0" max="255" value="28" style="width:60px !important"></label>
+                            <label>到達半径 <input type="number" id="paintSmartMaxR" min="1" max="2048" value="64" style="width:70px !important"></label>
+                            <label>エッジ感度 <input type="number" id="paintSmartEdge" min="0" max="255" value="40" style="width:70px !important"></label>
+                            <label>フェザー(px) <input type="number" id="paintSmartFeather" min="0" max="8" step="0.5" value="1.5" style="width:70px !important"></label>
+                            <label>モード
+                              <select id="paintSmartMode" style="width:120px !important">
+                                <option value="connected" selected>連結領域</option>
+                                <option value="disk">円内のみ</option>
+                              </select>
+                            </label>
+                            <label>タイミング
+                              <select id="paintEraserTiming" style="width:120px !important">
+                                <option value="onRelease" selected>離したとき</option>
+                                <option value="onPress">押したとき</option>
+                              </select>
+                            </label>
                         </span>
                         <span id="blurOpts" class="tool-options">
                             <label>半径 <input type="number" id="paintBlurRadius" min="1" max="64" value="8" style="width:60px !important"></label>
                             <label>強度 <input type="number" id="paintBlurPasses" min="1" max="5" value="1" style="width:60px !important"></label>
                         </span>
+                    </div>
+                    <!-- ★スマート操作調整パネル（新UI） -->
+                    <div id="smartAdjustmentPanel" class="smart-adjust-panel" style="display:none;">
+                        <div class="smart-adjust-header">
+                            <span class="smart-adjust-title">スマート操作の調整</span>
+                        </div>
+                        <div class="smart-history-selector row small">
+                            <label for="smartHistorySelect" class="small">履歴:</label>
+                            <select id="smartHistorySelect" class="small" style="flex: 1; width: auto !important;"></select>
+                        </div>
+                        <div class="smart-adjust-controls row small">
+                            <label for="smartAdjustSlider" class="small">強度:</label>
+                            <input type="range" id="smartAdjustSlider" min="0" max="100" step="1" value="50" style="width: 140px;">
+                            <span id="smartAdjustValue" class="small muted">50</span>
+                        </div>
+                        <div class="muted extra-small" style="margin-top:4px;">
+                          選択した履歴の強度を再調整できます。
+                        </div>
                     </div>
                     <div class="row small" style="justify-content:space-between; align-items:center; margin-top:6px;">
                         <span id="paintTargetInfo" class="muted">対象: -</span>
@@ -1004,8 +1059,7 @@
                     <div id="videoFEPanelSplit" class="video-fe__panel">
                       <div class="video-fe__split-controls">
                         <div class="row small">
-                          <button id="videoFESplitAtCurrent" class="btn small primary">現在位置で分割</button>
-                          <label>分割位置(ms) <input id="videoFESplitTime" type="number" min="0" step="1"></label>
+                          <button id="videoFESplitAtCurrent" class="btn small primary">現在位置で分割</button>                          <label>分割位置(ms) <input id="videoFESplitTime" type="number" min="0" step="1"></label>
                         </div>
                         
                         <div class="row small" style="margin-top: 8px;">
@@ -1222,8 +1276,7 @@
                       <label>対象
                         <select id="pngOptTarget">
                           <option value="composite" selected>合成結果（現在のフレーム）</option>
-                          <option value="selected">選択PNG</option></select>
-                      </label>
+                          <option value="selected">選択PNG</option></select>                      </label>
                       <label class="row small"><input id="pngOptHigh" type="checkbox"> 高圧縮(遅い)</label>
                       <label class="row small"><input id="pngOptUltra" type="checkbox"> 高圧縮(超遅い)</label>
                       <button class="btn primary" id="optimizePNG">最適化して保存</button>
@@ -1957,6 +2010,19 @@
       paintTouchOffsetPx: $('#paintTouchOffsetPx'),
       paintScrollLockEnabled: $('#paintScrollLockEnabled'),
       paintCanvasContainer: $('#paintCanvasContainer'),
+      // スマート消しゴムUI
+      paintSmartEraser: $('#paintSmartEraser'),
+      paintSmartTol: $('#paintSmartTol'),
+      paintSmartMaxR: $('#paintSmartMaxR'),
+      paintSmartEdge: $('#paintSmartEdge'),
+      paintSmartFeather: $('#paintSmartFeather'),
+      paintSmartMode: $('#paintSmartMode'),
+      paintEraserTiming: $('#paintEraserTiming'),
+      // ★スマート調整パネルのUI要素
+      smartAdjustmentPanel: $('#smartAdjustmentPanel'),
+      smartHistorySelect: $('#smartHistorySelect'),
+      smartAdjustSlider: $('#smartAdjustSlider'),
+      smartAdjustValue: $('#smartAdjustValue'),
       // GIF品質向上UI
       gifHQPreset: $('#gifHQPreset', settingsScreen),
       gifFastPreset: $('#gifFastPreset', settingsScreen),
@@ -1995,6 +2061,8 @@
             if (ui.gifMergeOptions) {
                 ui.gifMergeOptions.style.opacity = ui.gifMergeEnabled.checked ? '1' : '0.4';
 
+
+
                 $$('input', ui.gifMergeOptions).forEach(el => el.disabled = !ui.gifMergeEnabled.checked);
             }
         };
@@ -2015,6 +2083,58 @@
     const gifFEState = { idx: 0 };
     const gifUndoHistory = new Map();
     const pngPaintHistory = new Map();
+    // ★スマート操作履歴管理システム
+    const smartOperationHistory = {
+        histories: new Map(), // layerId -> operation[]
+        maxHistoryPerLayer: 10,
+        currentSelection: null, // { layerId, operationId }
+
+        recordOperation(layerId, operation) {
+            if (!this.histories.has(layerId)) {
+                this.histories.set(layerId, []);
+            }
+            const history = this.histories.get(layerId);
+            const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            
+            const record = {
+                id: operationId,
+                type: operation.type, // 'erase', 'fill', etc.
+                params: operation.params,
+                adjustmentFactor: operation.adjustmentFactor || 50,
+                imageData: operation.imageData, // 元のImageData
+                bounds: operation.bounds, // {x0, y0, width, height}
+                metadata: operation.metadata || {}
+            };
+            history.push(record);
+
+            if (history.length > this.maxHistoryPerLayer) {
+                history.shift();
+            }
+            this.currentSelection = { layerId, operationId };
+            return operationId;
+        },
+
+        getOperation(layerId, operationId) {
+            const history = this.histories.get(layerId);
+            return history ? history.find(op => op.id === operationId) : null;
+        },
+        
+        getLayerHistory(layerId) {
+            return this.histories.get(layerId) || [];
+        },
+
+        updateAdjustment(layerId, operationId, factor) {
+            const op = this.getOperation(layerId, operationId);
+            if (op) op.adjustmentFactor = factor;
+        },
+
+        clearLayerHistory(layerId) {
+            this.histories.delete(layerId);
+            if (this.currentSelection?.layerId === layerId) {
+                this.currentSelection = null;
+            }
+        }
+    };
     const UNDO_HISTORY_MAX = 20;
     const frameLock = { enabled: false, layerId: null, idx: 0 };
     const autoSummary = document.getElementById('autoSummary');
@@ -2132,6 +2252,7 @@
       
       gifUndoHistory.delete(id);
       pngPaintHistory.delete(id);
+      smartOperationHistory.clearLayerHistory(id); // ★スマート履歴も削除
       layers = layers.filter(l => l.id !== id);
       
       if (selectedId === id) {
@@ -4628,17 +4749,209 @@
         scrollLocked: false,
         fillTiming: 'onRelease',
         pendingFill: null,
-        // ピンチ状態管理
-        pointers: new Map(), // pointerId -> {x,y}
-        pinch: {
-          active: false,
-          startDist: 0,
-          startZoom: 1,
-          focalImgX: 0,
-          focalImgY: 0
-        }
+        pointers: new Map(),
+        pinch: { active: false, startDist: 0, startZoom: 1, focalImgX: 0, focalImgY: 0 },
+        // ★レイアウトキャッシュを追加
+        layout: { containerW: 0, containerH: 0, scaledW: 0, scaledH: 0 },
       };
       
+      // ★動的デフォルト半径計算
+      function calculateDefaultSmartRadius(canvas) {
+          if (!canvas) return 100;
+          const diagonal = Math.hypot(canvas.width, canvas.height);
+          const defaultRadius = Math.round(diagonal * 0.5);
+          return Math.max(100, Math.min(2048, defaultRadius));
+      }
+
+      function scaleSmartParams(base, factor) {
+        const k = 0.5 + (factor / 100); // 0.5 to 1.5
+        const tol = Math.max(1, Math.min(255, Math.round(base.tol * k)));
+        const edge = Math.max(1, Math.min(255, Math.round(base.edge * k)));
+        return { ...base, tol, edge };
+      }
+      
+      function computeSmartMaskFromImageData(img, tw, th, sx, sy, opts) {
+        const { tol, maxR, edge, mode } = opts;
+        const data = img.data;
+        const visited = new Uint8Array(tw * th);
+        const mask = new Uint8Array(tw * th);
+        const stack = [[sx, sy]];
+        const maxR2 = maxR * maxR;
+
+        const seedIdx = (sy * tw + sx) * 4;
+        const sr = data[seedIdx], sg = data[seedIdx + 1], sb = data[seedIdx + 2];
+
+        function edgeMag(px, py) {
+          const idx = (py * tw + px) * 4;
+          let dxr=0, dyr=0, dxg=0, dyg=0, dxb=0, dyb=0;
+          if (px > 0 && px < tw - 1) {
+            const L = idx - 4, R = idx + 4;
+            dxr = (data[R] - data[L]); dxg = (data[R+1] - data[L+1]); dxb = (data[R+2] - data[L+2]);
+          }
+          if (py > 0 && py < th - 1) {
+            const U = idx - tw*4, D = idx + tw*4;
+            dyr = (data[D] - data[U]); dyg = (data[D+1] - data[U+1]); dyb = (data[D+2] - data[U+2]);
+          }
+          return (Math.abs(dxr) + Math.abs(dxg) + Math.abs(dxb) + Math.abs(dyr) + Math.abs(dyg) + Math.abs(dyb)) / 6;
+        }
+        function colorDistIdx(i) {
+          const dr = Math.abs(data[i] - sr);
+          const dg = Math.abs(data[i+1] - sg);
+          const db = Math.abs(data[i+2] - sb);
+          return Math.max(dr, dg, db);
+        }
+
+        while (stack.length) {
+          const [px, py] = stack.pop();
+          const p = py * tw + px;
+          if (visited[p]) continue;
+          visited[p] = 1;
+
+          const dx = px - sx, dy = py - sy;
+          if (mode !== 'connected' && (dx*dx + dy*dy) > maxR2) continue;
+
+          const i = p * 4;
+          if (colorDistIdx(i) <= tol && edgeMag(px, py) <= edge) {
+            mask[p] = 1;
+            if (px > 0) stack.push([px - 1, py]);
+            if (px < tw - 1) stack.push([px + 1, py]);
+            if (py > 0) stack.push([px, py - 1]);
+            if (py < th - 1) stack.push([px, py + 1]);
+          }
+        }
+        return mask;
+      }
+      
+      // ★スマート操作の適用ロジック
+      function applySmartOperation(tgt, operationId, adjustmentFactor) {
+          const operation = smartOperationHistory.getOperation(tgt.layer.id, operationId);
+          if (!operation) return;
+
+          const cnv = tgt.canvas;
+          const ctx = cnv.getContext('2d');
+          const { x0, y0, width, height } = operation.bounds;
+
+          ctx.putImageData(operation.imageData, x0, y0);
+
+          const scaledParams = scaleSmartParams(operation.params, adjustmentFactor);
+          const sx = operation.params.seedX - x0;
+          const sy = operation.params.seedY - y0;
+          
+          const mask = computeSmartMaskFromImageData(operation.imageData, width, height, sx, sy, scaledParams);
+          
+          const mcv = document.createElement('canvas');
+          mcv.width = width; mcv.height = height;
+          const mctx = mcv.getContext('2d');
+          const mid = mctx.createImageData(width, height);
+          for (let p = 0; p < width * height; p++) {
+              const a = mask[p] ? 255 : 0;
+              mid.data.set([255, 255, 255, a], p * 4);
+          }
+          mctx.putImageData(mid, 0, 0);
+
+          ctx.save();
+          ctx.globalCompositeOperation = 'destination-out';
+          if (scaledParams.feather > 0) ctx.filter = `blur(${scaledParams.feather}px)`;
+          ctx.drawImage(mcv, x0, y0);
+          ctx.restore();
+
+          smartOperationHistory.updateAdjustment(tgt.layer.id, operationId, adjustmentFactor);
+          
+          if (tgt.kind === 'gif') rebuildGifThumbnails(tgt.layer);
+      }
+
+      // ★スマート調整UIの更新ロジック
+      function updateSmartAdjustmentUI(layerId, currentOperationId) {
+          const panel = ui.smartAdjustmentPanel;
+          if (!panel) return;
+          
+          const history = smartOperationHistory.getLayerHistory(layerId);
+          const select = ui.smartHistorySelect;
+          const slider = ui.smartAdjustSlider;
+          const valueLabel = ui.smartAdjustValue;
+          
+          select.innerHTML = '';
+          history.slice().reverse().forEach((op, index) => {
+              const option = document.createElement('option');
+              option.value = op.id;
+              const time = new Date(op.metadata.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              option.textContent = `${history.length - index}. ${op.type} @ ${time} (${op.adjustmentFactor}%)`;
+              if (op.id === currentOperationId) {
+                  option.selected = true;
+              }
+              select.appendChild(option);
+          });
+          
+          const currentOp = smartOperationHistory.getOperation(layerId, currentOperationId);
+          if (currentOp) {
+              slider.value = currentOp.adjustmentFactor;
+              valueLabel.textContent = currentOp.adjustmentFactor;
+              panel.style.display = 'block';
+          } else {
+              panel.style.display = 'none';
+          }
+      }
+
+      // ★スマート消去実行時の処理
+      function smartEraseRegion(tgt, ix, iy, opts) {
+        const cnv = tgt.canvas;
+        const w = cnv.width, h = cnv.height;
+        
+        const effectiveMaxR = opts.maxR || calculateDefaultSmartRadius(cnv);
+
+        const x0 = Math.max(0, ix - effectiveMaxR);
+        const y0 = Math.max(0, iy - effectiveMaxR);
+        const x1 = Math.min(w, ix + effectiveMaxR);
+        const y1 = Math.min(h, iy + effectiveMaxR);
+        const tw = x1 - x0;
+        const th = y1 - y0;
+
+        const ctx = cnv.getContext('2d');
+        const base = ctx.getImageData(x0, y0, tw, th);
+        
+        const operationId = smartOperationHistory.recordOperation(tgt.layer.id, {
+            type: 'erase',
+            params: { ...opts, maxR: effectiveMaxR, seedX: ix, seedY: iy },
+            adjustmentFactor: 50,
+            imageData: base,
+            bounds: { x0, y0, width: tw, height: th },
+            metadata: { frameIndex: tgt.kind === 'gif' ? tgt.idx : null, timestamp: Date.now() }
+        });
+        
+        applySmartOperation(tgt, operationId, 50);
+        updateSmartAdjustmentUI(tgt.layer.id, operationId);
+      }
+      
+      // ★調整UIのイベントリスナー
+      ui.smartHistorySelect?.addEventListener('change', () => {
+          const selection = smartOperationHistory.currentSelection;
+          if (!selection) return;
+          const selectedId = ui.smartHistorySelect.value;
+          smartOperationHistory.currentSelection.operationId = selectedId;
+          const op = smartOperationHistory.getOperation(selection.layerId, selectedId);
+          if (op) {
+              ui.smartAdjustSlider.value = op.adjustmentFactor;
+              ui.smartAdjustValue.textContent = op.adjustmentFactor;
+              const tgt = getPaintTarget();
+              if (tgt) {
+                  applySmartOperation(tgt, selectedId, op.adjustmentFactor);
+                  drawPaintView(tgt.canvas, { noLayout: true });
+              }
+          }
+      });
+      ui.smartAdjustSlider?.addEventListener('input', () => {
+          const factor = Number(ui.smartAdjustSlider.value);
+          ui.smartAdjustValue.textContent = factor;
+          const selection = smartOperationHistory.currentSelection;
+          if (selection) {
+              const tgt = getPaintTarget();
+              if (tgt) {
+                  applySmartOperation(tgt, selection.operationId, factor);
+                  drawPaintView(tgt.canvas, { noLayout: true });
+              }
+          }
+      });
+
       const savedOE = localStorage.getItem('paintTouchOffsetEnabled');
       const savedOP = localStorage.getItem('paintTouchOffsetPx');
       paintState.offsetEnabled = (savedOE === null) ? true : (savedOE === '1');
@@ -4651,7 +4964,7 @@
         paintState.offsetEnabled = ui.paintTouchOffsetEnabled.checked;
         localStorage.setItem('paintTouchOffsetEnabled', paintState.offsetEnabled ? '1' : '0');
         paintState.marker.active = false;
-        drawPaintView(getPaintTarget()?.canvas);
+        drawPaintView(getPaintTarget()?.canvas, { noLayout: true });
       });
       ui.paintTouchOffsetPx?.addEventListener('input', () => {
         const v = Math.max(0, Math.min(200, Number(ui.paintTouchOffsetPx.value)||0));
@@ -4677,6 +4990,26 @@
         localStorage.setItem('paintFillTiming', paintState.fillTiming);
       });
 
+      const savedEraserTiming = localStorage.getItem('paintEraserTiming');
+      if (ui.paintEraserTiming && savedEraserTiming) ui.paintEraserTiming.value = savedEraserTiming;
+      ui.paintEraserTiming?.addEventListener('change', () => {
+        localStorage.setItem('paintEraserTiming', ui.paintEraserTiming.value);
+      });
+
+      ['paintSmartEraser','paintSmartTol','paintSmartMaxR','paintSmartEdge','paintSmartFeather','paintSmartMode'].forEach(id=>{
+        const el = ui[id]; if(!el) return;
+        const saved = localStorage.getItem(id);
+        if (saved !== null) {
+          if (el.type === 'checkbox') el.checked = saved === '1';
+          else el.value = saved;
+        }
+        el.addEventListener('change', ()=>{
+          const val = (el.type==='checkbox') ? (el.checked?'1':'0') : el.value;
+          localStorage.setItem(id, val);
+          if (id === 'paintSmartMaxR') localStorage.setItem('paintSmartMaxR_set', '1');
+        });
+      });
+      
       function engageScrollLock() {
         if (paintState.scrollLocked) return;
         paintState.scrollLocked = true;
@@ -4745,30 +5078,9 @@
           return null;
       }
       
-      window.syncPaintPanel = function() {
-          const tgt = getPaintTarget();
-          const isPng = tgt && tgt.kind === 'png';
-          ui.paintApplyToPng.disabled = !isPng;
-          ui.paintRevertPng.disabled = !isPng;
-          
-          if (!tgt) {
-              ui.paintTargetInfo.textContent = '対象: -';
-              drawPaintView(null);
-              return;
-          }
-
-          if (tgt.kind === 'gif') {
-              const N = tgt.layer.gif.frames.length;
-              const i = (frameLock.enabled && frameLock.layerId === tgt.layer.id) ? frameLock.idx : gifFEState.idx | 0;
-              ui.paintTargetInfo.textContent = `対象: GIFフレーム ${i + 1}/${N}`;
-          } else {
-              ui.paintTargetInfo.textContent = `対象: PNG (原寸 ${tgt.canvas.width}×${tgt.canvas.height})`;
-          }
-          drawPaintView(tgt.canvas);
-          updatePaintUndoUI(tgt);
-      }
-      
-      function drawPaintView(srcCanvas) {
+      // ★ drawPaintView の改修
+      function drawPaintView(srcCanvas, options = {}) {
+          const { noLayout = false } = options;
           const pc = ui.paintCanvas;
           const container = ui.paintCanvasContainer;
           const pctx = pc.getContext('2d');
@@ -4781,24 +5093,34 @@
           const z = paintState.zoom;
           const sw = srcCanvas.width, sh = srcCanvas.height;
           
-          const containerRect = container.getBoundingClientRect();
-          const containerW = container.clientWidth - 12; // padding 6px * 2
-          const containerH = container.clientHeight - 12;
-          
+          const containerW = container.clientWidth;
+          const containerH = container.clientHeight;
           const scaledW = Math.round(sw * z);
           const scaledH = Math.round(sh * z);
+
+          const needsLayout = !noLayout && (
+              scaledW !== paintState.layout.scaledW ||
+              scaledH !== paintState.layout.scaledH ||
+              containerW !== paintState.layout.containerW ||
+              containerH !== paintState.layout.containerH ||
+              pc.width === 0 || pc.height === 0
+          );
+
+          if (needsLayout) {
+              paintState.canvasWidth  = Math.max(scaledW, containerW);
+              paintState.canvasHeight = Math.max(scaledH, containerH);
+
+              pc.width  = paintState.canvasWidth;
+              pc.height = paintState.canvasHeight;
+              
+              paintState.drawX = Math.max(0, (paintState.canvasWidth  - scaledW) / 2);
+              paintState.drawY = Math.max(0, (paintState.canvasHeight - scaledH) / 2);
+              paintState.drawScale = z;
+
+              paintState.layout = { containerW, containerH, scaledW, scaledH };
+          }
           
-          paintState.canvasWidth = Math.max(scaledW, containerW);
-          paintState.canvasHeight = Math.max(scaledH, containerH);
-          
-          pc.width = paintState.canvasWidth;
-          pc.height = paintState.canvasHeight;
-          
-          paintState.drawX = Math.max(0, (paintState.canvasWidth - scaledW) / 2);
-          paintState.drawY = Math.max(0, (paintState.canvasHeight - scaledH) / 2);
-          paintState.drawScale = z;
-          
-          pctx.clearRect(0, 0, paintState.canvasWidth, paintState.canvasHeight);
+          pctx.clearRect(0, 0, pc.width, pc.height);
           pctx.imageSmoothingEnabled = z < 1;
           pctx.imageSmoothingQuality = 'high';
           pctx.drawImage(srcCanvas, paintState.drawX, paintState.drawY, scaledW, scaledH);
@@ -4806,10 +5128,49 @@
           if (paintState.marker.active && paintState.marker.isTouch) {
             drawOffsetMarker(pctx);
           }
-
           if (paintState.pendingFill) {
             drawPendingFillMarker(pctx);
           }
+      }
+      
+      const originalSyncPaintPanel = window.syncPaintPanel;
+      window.syncPaintPanel = function() {
+          if (originalSyncPaintPanel) originalSyncPaintPanel();
+
+          const tgt = getPaintTarget();
+          const isPng = tgt && tgt.kind === 'png';
+          ui.paintApplyToPng.disabled = !isPng;
+          ui.paintRevertPng.disabled = !isPng;
+          
+          if (!tgt) {
+              ui.paintTargetInfo.textContent = '対象: -';
+              drawPaintView(null);
+              if (ui.smartAdjustmentPanel) ui.smartAdjustmentPanel.style.display = 'none';
+              return;
+          }
+
+          if (tgt.kind === 'gif') {
+              const N = tgt.layer.gif.frames.length;
+              const i = (frameLock.enabled && frameLock.layerId === tgt.layer.id) ? frameLock.idx : gifFEState.idx | 0;
+              ui.paintTargetInfo.textContent = `対象: GIFフレーム ${i + 1}/${N}`;
+          } else {
+              ui.paintTargetInfo.textContent = `対象: PNG (原寸 ${tgt.canvas.width}×${tgt.canvas.height})`;
+          }
+          
+          if (ui.paintSmartMaxR && !localStorage.getItem('paintSmartMaxR_set')) {
+              ui.paintSmartMaxR.value = calculateDefaultSmartRadius(tgt.canvas);
+          }
+          
+          const history = smartOperationHistory.getLayerHistory(tgt.layer.id);
+          if (history.length > 0) {
+              const lastOpId = smartOperationHistory.currentSelection?.operationId || history[history.length - 1].id;
+              updateSmartAdjustmentUI(tgt.layer.id, lastOpId);
+          } else {
+              if (ui.smartAdjustmentPanel) ui.smartAdjustmentPanel.style.display = 'none';
+          }
+
+          drawPaintView(tgt.canvas);
+          updatePaintUndoUI(tgt);
       }
       
       function drawOffsetMarker(pctx) {
@@ -4873,6 +5234,8 @@
           };
       };
 
+
+
       
       $$('#paintSection .btn[id^="paintTool"]').forEach(btn => {
         btn.addEventListener('click', () => setActiveTool(btn.id.replace('paintTool', '').toLowerCase()));
@@ -4891,7 +5254,8 @@
           const hex = `#${(p[0]<<16 | p[1]<<8 | p[2]).toString(16).padStart(6, '0')}`;
           ui.paintColor.value = hex;
         },
-        fill: (tgt, x, y, lastX, lastY, timing = 'onPress') => {
+        fill: (tgt, x, y, lastX, lastY, timing) => {
+            timing = timing || ui.paintFillTiming?.value || 'onRelease';
             if (timing === 'onRelease') {
                 const container = ui.paintCanvasContainer;
                 paintState.pendingFill = {
@@ -4909,26 +5273,51 @@
             floodFill(tgt.canvas, x, y, { ...color, a: 255 }, tol, mode);
         },
         eraser: (tgt, x, y, lastX, lastY) => {
-          const r = parseInt(ui.paintEraserRadius.value) || 10;
-          const ctx = tgt.canvas.getContext('2d');
-          ctx.save();
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.fillStyle = '#000';
-          
-          const dist = Math.hypot(x-lastX, y-lastY);
-          const angle = Math.atan2(y-lastY, x-lastX);
-          for (let i = 0; i < dist; i+= r/2) {
-              const px = lastX + Math.cos(angle) * i;
-              const py = lastY + Math.sin(angle) * i;
-              ctx.beginPath();
-              ctx.arc(px, py, r, 0, Math.PI * 2);
-              ctx.fill();
+          const smartOn = !!ui.paintSmartEraser?.checked;
+          const timing = ui.paintEraserTiming?.value || 'onRelease';
+
+          if (smartOn && timing === 'onPress') {
+              const dx = x - (lastX ?? x), dy = y - (lastY ?? y);
+              const minStep = 6;
+              if (lastX !== undefined && (dx*dx + dy*dy) < (minStep*minStep)) return;
           }
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
           
-          ctx.restore();
+          if (smartOn) {
+            if ((timing === 'onPress' && paintState.isPointerDown) || (timing === 'onRelease' && !paintState.isPointerDown)) {
+                const opts = {
+                  tol: Math.max(0, Math.min(255, parseInt(ui.paintSmartTol?.value)||28)),
+                  maxR: Math.max(1, Math.min(2048, parseInt(ui.paintSmartMaxR?.value)||64)),
+                  edge: Math.max(0, Math.min(255, parseInt(ui.paintSmartEdge?.value)||40)),
+                  feather: Math.max(0, parseFloat(ui.paintSmartFeather?.value)||0),
+                  mode: ui.paintSmartMode?.value || 'connected'
+                };
+                smartEraseRegion(tgt, x, y, opts);
+                return;
+            }
+          }
+
+          if (!smartOn) {
+            const r = parseInt(ui.paintEraserRadius.value) || 10;
+            const ctx = tgt.canvas.getContext('2d');
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = '#000';
+            
+            const dist = Math.hypot(x-lastX, y-lastY);
+            const angle = Math.atan2(y-lastY, x-lastX);
+            for (let i = 0; i < dist; i+= r/2) {
+                const px = lastX + Math.cos(angle) * i;
+                const py = lastY + Math.sin(angle) * i;
+                ctx.beginPath();
+                ctx.arc(px, py, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+          }
         },
         blur: (tgt, x, y) => {
             const r = parseInt(ui.paintBlurRadius.value) || 5;
@@ -4988,23 +5377,19 @@
           }
 
           if (outOfBounds) {
-            drawPaintView(tgt.canvas);
+            drawPaintView(tgt.canvas, { noLayout: true });
             return;
           }
 
           const toolFn = tools[paintState.activeTool];
           if(toolFn) {
-              if (paintState.activeTool === 'fill') {
-                toolFn(tgt, coords.x, coords.y, paintState.lastX, paintState.lastY, paintState.fillTiming);
-              } else {
-                toolFn(tgt, coords.x, coords.y, paintState.lastX, paintState.lastY);
-              }
+              toolFn(tgt, coords.x, coords.y, paintState.lastX, paintState.lastY);
           }
 
           paintState.lastX = coords.x;
           paintState.lastY = coords.y;
 
-          drawPaintView(tgt.canvas);
+          drawPaintView(tgt.canvas, { noLayout: true });
           if (tgt.kind === 'gif') rebuildGifThumbnails(tgt.layer);
       };
       
@@ -5100,20 +5485,36 @@
         }
 
         if (paintState.isPointerDown) {
-          if (paintState.pendingFill && paintState.activeTool === 'fill') {
-              const { imageX, imageY, target } = paintState.pendingFill;
-              const color = hexToRgb(ui.paintColor.value);
-              const tol = parseInt(ui.paintFillTolerance.value) || 0;
-              const mode = ui.paintFillMode.value;
-              floodFill(target.canvas, imageX, imageY, { ...color, a: 255 }, tol, mode);
-              drawPaintView(target.canvas);
-              if (target.kind === 'gif') rebuildGifThumbnails(target.layer);
-              paintState.pendingFill = null;
+          const tgt = getPaintTarget();
+          if (tgt) {
+              if (paintState.pendingFill && paintState.activeTool === 'fill') {
+                  const { imageX, imageY, target } = paintState.pendingFill;
+                  const color = hexToRgb(ui.paintColor.value);
+                  const tol = parseInt(ui.paintFillTolerance.value) || 0;
+                  const mode = ui.paintFillMode.value;
+                  floodFill(target.canvas, imageX, imageY, { ...color, a: 255 }, tol, mode);
+                  drawPaintView(target.canvas, { noLayout: true });
+                  if (target.kind === 'gif') rebuildGifThumbnails(target.layer);
+                  paintState.pendingFill = null;
+              }
+              // ★スマート消しゴムの onRelease 処理
+              if (paintState.activeTool === 'eraser' && ui.paintSmartEraser?.checked && ui.paintEraserTiming?.value === 'onRelease') {
+                  const opts = {
+                    tol: Math.max(0, Math.min(255, parseInt(ui.paintSmartTol?.value)||28)),
+                    maxR: Math.max(1, Math.min(2048, parseInt(ui.paintSmartMaxR?.value)||64)),
+                    edge: Math.max(0, Math.min(255, parseInt(ui.paintSmartEdge?.value)||40)),
+                    feather: Math.max(0, parseFloat(ui.paintSmartFeather?.value)||0),
+                    mode: ui.paintSmartMode?.value || 'connected'
+                  };
+                  smartEraseRegion(tgt, paintState.lastX, paintState.lastY, opts);
+                  drawPaintView(tgt.canvas, { noLayout: true });
+              }
           }
+
           paintState.isPointerDown = false;
           if (paintState.marker.active) {
               paintState.marker.active = false;
-              drawPaintView(getPaintTarget()?.canvas);
+              drawPaintView(getPaintTarget()?.canvas, { noLayout: true });
           }
         }
         
@@ -5132,7 +5533,7 @@
             paintState.pendingFill = null;
             if (paintState.marker.active) {
               paintState.marker.active = false;
-              drawPaintView(getPaintTarget()?.canvas);
+              drawPaintView(getPaintTarget()?.canvas, { noLayout: true });
             }
             startPinch();
             if (paintState.scrollLockEnabled) engageScrollLock();
@@ -5148,7 +5549,9 @@
         const tgt = getPaintTarget();
         if (!tgt) return;
 
-        if(paintState.activeTool !== 'eyedropper') pushPaintUndo(tgt);
+        if(paintState.activeTool !== 'eyedropper') {
+          pushPaintUndo(tgt);
+        }
 
         const container = ui.paintCanvasContainer;
         const containerRect = container.getBoundingClientRect();
@@ -5281,6 +5684,7 @@
                 res.canvas.getContext('2d').putImageData(res.originalImageData, 0, 0);
                 res.dirty = false;
                 pngPaintHistory.delete(selectedId);
+                smartOperationHistory.clearLayerHistory(selectedId);
                 syncPaintPanel();
             }
         }
@@ -5302,7 +5706,7 @@
           c.putImageData(next, 0, 0);
         }
         res.dirty = true;
-        drawPaintView(res.canvas);
+        drawPaintView(res.canvas, { noLayout: true });
         updatePaintUndoUI({kind:'png', layer: getSelectedLayer()});
       }
 
